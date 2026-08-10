@@ -1,6 +1,8 @@
 # Environment variables
 .env
 .env.*
+!.env.example
+*.zip
 
 # Python cache
 __pycache__/
@@ -19,7 +21,7 @@ logs/
 # Data / uploads (do not commit personal files)
 *.pdf
 *.xlsx
-
+*.zip
 # OS files
 .DS_Store
 Thumbs.db
