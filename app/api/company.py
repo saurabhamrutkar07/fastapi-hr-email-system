@@ -14,6 +14,9 @@ from fastapi import APIRouter, Depends
 from app.schemas.company import AddCompanyDetailsRequest
 from app.services.company_service import create_company_contact
 from app.core.security import verify_key_secret
+from common.Logger import Logger
+
+logger = Logger.get_logger()
 
 # Initialize Router with Security Dependency
 router = APIRouter(
@@ -28,5 +31,6 @@ async def add_company_details(payload: AddCompanyDetailsRequest):
     -----------------------------
     Accepts company HR details (name, email, title, company_name) and saves them into the database.
     """
-    return await create_company_contact(payload)
+    logger.info("Execution of function create_company_contact started")
+    return await create_company_contact(payload,logger)
 

@@ -1,74 +1,209 @@
 """
-===============================================================================
 Application Entry Point (main.py)
-===============================================================================
-This module serves as the primary entry point for the FastAPI application.
-It configures application lifecycle hooks, initializes database schemas,
-and registers all API routes across different modular domain controllers.
-===============================================================================
 """
 
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-# Import API Routers from modular domain modules
+# ============================================================
+# API Routers
+# ============================================================
+
 from app.api.email import router as email_router
 from app.api.company import router as company_router
-from app.api.hr_contacts_imports import router as hr_contacts_import_router
-from app.api.fresh_contacts_api import router as fresh_contacts_router
+from app.api.hr_contacts_imports import (
+    router as hr_contacts_import_router,
+)
+from app.api.fresh_contacts_api import (
+    router as fresh_contacts_router,
+)
+from app.api.hr_contacts import (
+    router as hr_contacts_router,
+)
+
+# ============================================================
+# Database
+# ============================================================
+
 from app.database.database import init_db
+
+# ============================================================
+# Logger
+# ============================================================
+
 from common.Logger import Logger
 
+
 logger = Logger.get_logger()
+
+
+# ============================================================
+# Application Lifespan
+# ============================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    FastAPI Lifespan Manager:
-    -------------------------
-    Executes startup and shutdown tasks.
-    On application startup, `init_db()` is called to automatically inspect models
-    and create missing database tables (e.g., hr_contacts_v2, email_transactions).
+    FastAPI Lifespan Manager.
+
+    Startup:
+        Initializes missing database tables.
+
+    Shutdown:
+        Performs application shutdown logging.
     """
-    logger.info("Application setup initiated")
-    # Initialize database tables on server startup
+
+    logger.info(
+        "Application setup initiated"
+    )
+
+    # --------------------------------------------------------
+    # Initialize database
+    # --------------------------------------------------------
+
     await init_db()
 
-    logger.info("Application setup initiated successfull")
-    
-    # Yield control back to FastAPI to handle incoming HTTP requests
+    logger.info(
+        "Application setup initiated successfully"
+    )
+
+    # --------------------------------------------------------
+    # Application runs here
+    # --------------------------------------------------------
+
     yield
 
-    logger.info("Application shutdown initiated.")
-    
-    # Clean-up code on server shutdown can be placed here if needed
+    # --------------------------------------------------------
+    # Shutdown
+    # --------------------------------------------------------
+
+    logger.info(
+        "Application shutdown initiated."
+    )
 
 
-# Initialize main FastAPI application instance
+# ============================================================
+# FastAPI Application
+# ============================================================
+
 app = FastAPI(
     title="HR Contact & Cold Email System",
-    description="Automated Cold Emailing System with HR Contact Management and Transaction Tracking",
+    description=(
+        "Automated Cold Emailing System with "
+        "HR Contact Management and "
+        "Transaction Tracking"
+    ),
     version="2.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# -----------------------------------------------------------------------------
+
+# ============================================================
 # Router Registrations
-# -----------------------------------------------------------------------------
-# Mount Email operations endpoints under `/email` prefix
-logger.info("Registering Email Router")
-app.include_router(email_router, prefix="/email", tags=["Email"])
+# ============================================================
 
-# Mount Company contact endpoints under `/company` prefix
-logger.info("Registering Company Router")
-app.include_router(company_router, prefix="/company", tags=["Company"])
+# ------------------------------------------------------------
+# Email APIs
+#
+# Example:
+# POST /email/...
+# ------------------------------------------------------------
 
-# Mount PDF import endpoints under `/hr-contacts` prefix
-logger.info("Registering HR Contacts Router")
-app.include_router(hr_contacts_import_router, prefix="/hr-contacts", tags=["HR Contacts"])
+logger.info(
+    "Registering Email Router"
+)
 
-# Mount Fresh Contacts (V2 API) endpoints under `/contacts/v2` prefix
-logger.info("Registering Fresh Contacts Router")
-app.include_router(fresh_contacts_router, prefix="/contacts/v2", tags=["Fresh Contacts (v2)"])
+app.include_router(
+    email_router,
+    prefix="/email",
+    tags=["Email"],
+)
 
 
+# ------------------------------------------------------------
+# Company APIs
+#
+# Example:
+# POST /company/...
+# ------------------------------------------------------------
+
+logger.info(
+    "Registering Company Router"
+)
+
+app.include_router(
+    company_router,
+    prefix="/company",
+    tags=["Company"],
+)
+
+
+# ------------------------------------------------------------
+# HR Contact Import APIs
+#
+# This router should contain:
+#
+# - Excel upload
+# - CSV upload
+# - Other HR contact import functionality
+#
+# Example:
+#
+# POST /hr-contacts/upload-file
+# ------------------------------------------------------------
+
+logger.info(
+    "Registering HR Contact Import Router"
+)
+
+app.include_router(
+    hr_contacts_import_router,
+    prefix="/hr-contacts",
+    tags=["HR Contacts"],
+)
+
+
+# ------------------------------------------------------------
+# Fresh Contacts V2 APIs
+#
+# Example:
+#
+# POST /contacts/v2/...
+# ------------------------------------------------------------
+
+logger.info(
+    "Registering Fresh Contacts Router"
+)
+
+app.include_router(
+    fresh_contacts_router,
+    prefix="/contacts/v2",
+    tags=["Fresh Contacts (v2)"],
+)
+
+
+# ------------------------------------------------------------
+# HR Contacts APIs
+#
+# Keep this separate from import APIs if this router
+# contains normal CRUD/business operations.
+#
+# Example:
+#
+# GET /hr-contacts/...
+#
+# IMPORTANT:
+# If hr_contacts_router already uses the same paths as
+# hr_contacts_import_router, don't register duplicate routes.
+# ------------------------------------------------------------
+
+logger.info(
+    "Registering HR Contacts Router"
+)
+
+app.include_router(
+    hr_contacts_router,
+    prefix="/hr-contacts",
+    tags=["HR Contacts"],
+)

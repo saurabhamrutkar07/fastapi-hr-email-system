@@ -14,7 +14,7 @@ Exposes:
 import os
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Load environment variables
 load_dotenv()
@@ -33,21 +33,22 @@ engine = create_async_engine(
 
 # Async Session Factory
 # `expire_on_commit=False` prevents attributes from expiring after commit, allowing access after session close
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    expire_on_commit=False
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
 )
-
 # Base ORM Class for model declarations
 Base = declarative_base()
 
 
-async def init_db():
-    """
-    Initializes database tables asynchronously.
-    Inspects all ORM models inheriting from `Base` and executes DDL `CREATE TABLE IF NOT EXISTS`.
-    """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+def init_db():
+    db = SessionLocal()
 
-
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

@@ -54,7 +54,8 @@ logger = Logger.get_logger()
 # Jinja2 Environment Setup 
 # ======== ===================================================================== 
 # Create the Jinja2 environment once when this module is loaded. 
-# We do NOT create the Environment every time an email is sent because the # environment configuration is common to all emails. 
+# We do NOT create the Environment every time an email is sent because the 
+# environment configuration is common to all emails. 
 # TEMPLATE_DIR points to the directory containing our email templates.
 
 env = Environment(

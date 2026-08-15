@@ -9,9 +9,10 @@ Encapsulates all asynchronous database operations (CRUD) for:
 """
 
 from sqlalchemy import select, desc
-from app.database.database import AsyncSessionLocal
+# from app.database.database import AsyncSessionLocal
+from app.database.database import SessionLocal
 from app.models.models import HRContacts, HRContactsV2, EmailTransaction
-
+from common.Logger import Logger
 
 # -----------------------------------------------------------------------------
 # Recruiter & HR Contact Queries
@@ -34,19 +35,41 @@ async def get_all_fresh_recruiters() -> list[HRContactsV2]:
         return result.scalars().all()
 
 
-async def add_hr_contact(payload):
+async def add_hr_contact(payload,logger = None):
     """
     Inserts a single legacy HR contact into `hr_contacts`.
     """
-    async with AsyncSessionLocal() as session:
-        hr = HRContacts(
-            name=payload.name,
-            email=payload.email,
-            title=payload.title,
-            company=payload.company_name
+    if logger is None: 
+        logger = Logger.get_logger()
+    logger.info("Execution of query add hr started")
+    try:
+        async with AsyncSessionLocal() as session:
+            hr = HRContacts(
+                name=payload.name,
+                email=payload.email,
+                title=payload.title,
+                company=payload.company_name
+            )
+            session.add(hr)
+            await session.commit()
+            logger.info(
+                    "HR contact inserted successfully."
+                )
+    except Exception as exc:
+
+        # Roll back the current transaction.
+        # This is important because the database session may
+        # be left in a failed transaction state after an error.
+        await session.rollback()
+
+        # Log the complete exception and traceback.
+        logger.exception(
+            f"Failed to insert HR contact: {exc}"
         )
-        session.add(hr)
-        await session.commit()
+
+        # Re-raise the exception so the service/controller
+        # knows that the operation failed.
+        raise
 
 
 async def add_fresh_hr_contact(payload) -> HRContactsV2:
