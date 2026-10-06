@@ -6,15 +6,16 @@ from pydantic import (
     Field,
     field_validator,
 )
+from app.schemas.base import BaseSchema
 
 
-class ExcelContact(BaseModel):
+class ExcelContact(BaseSchema):
     """
     Normalized HR contact after Excel rows
     have been grouped together.
     """
 
-    name: str
+    name: str = Field(max_length=100)
 
     emails: list[EmailStr] = Field(
         default_factory=list
@@ -24,11 +25,11 @@ class ExcelContact(BaseModel):
         default_factory=list
     )
 
-    company: Optional[str] = None
+    company: Optional[str] = Field(None,max_length=150)
 
-    position: Optional[str] = None
+    position: Optional[str] = Field(None,max_length=150)
 
-    openings: Optional[str] = None
+    openings: Optional[str] = Field(None,max_length=255)
 
     @field_validator("name")
     @classmethod

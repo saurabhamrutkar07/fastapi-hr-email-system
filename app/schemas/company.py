@@ -6,7 +6,7 @@ Defines data validation models for incoming company contact creation requests.
 ===============================================================================
 """
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 import re
 
@@ -29,12 +29,14 @@ class AddCompanyDetailsRequest(BaseModel):
     company_name: str = Field(description="Company or employer name")
     contact_number: Optional[str] = Field(None, description="Optional phone number")
 
+    @field_validator("name","title","company_name")
     @classmethod
-    def validate_text(cls, v: str):
+    def validate_text(cls, v:str)->str:
         """
         Custom text sanitizer ensuring input contains only allowed characters.
         """
-        if not re.fullmatch(r"[A-Za-z0-9 .&'-]+", v):
-            raise ValueError("Only alphanumeric characters and standard punctuation allowed")
+        if not re.fullmatch(r"[A-Za-z0-9 .&'-]+",v):
+            raise ValueError("Only alphanumeric charactersand standard punctuation allowed")
         return v.strip()
+    
 

@@ -7,3 +7,11 @@ apscheduler
 python-dotenv
 python-multipart
 pydentic
+passlib[bcrypt]
+python-jose[cryptography]
+cryptography
+bcrypt<4.1
+boto3
+httpx
+pytest
+pytest-asyncio

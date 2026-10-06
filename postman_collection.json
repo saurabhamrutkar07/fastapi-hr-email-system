@@ -1,0 +1,426 @@
+{
+  "info": {
+    "name": "Send Email App - Full API Collection",
+    "description": "Covers Auth, Users, SMTP Credentials, Email Templates, Resumes, Email Sending, HR Contacts, and Company APIs.\n\nSetup:\n1. Set the `base_url` collection variable (default http://localhost:8000).\n2. Run requests in the Auth folder in order (Signup -> Verify OTP -> Set Password -> Login) to create your own account.\n3. Login automatically saves `access_token`/`refresh_token` as collection variables -- every other request already uses {{access_token}} in its Authorization header.\n4. For admin-only endpoints (Users list/role/status, HR Contacts write, Company), you need an admin account -- ask to have your account promoted after signing up, then re-run Login.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "signup_email", "value": "testuser@example.com" },
+    { "key": "otp_code", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "template_id", "value": "" },
+    { "key": "resume_id", "value": "" },
+    { "key": "request_id", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "1. Signup",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"{{signup_email}}\",\n  \"mobile\": \"9999999999\"\n}"
+            },
+            "description": "Creates a pending account and emails an OTP to signup_email. Check your inbox and set otp_code variable before the next request."
+          }
+        },
+        {
+          "name": "2. Verify OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/verify-otp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"otp_code\": \"{{otp_code}}\"\n}"
+            },
+            "description": "Set the otp_code collection variable from the email you received, then run this."
+          }
+        },
+        {
+          "name": "3. Set Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/set-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"MyPassword123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "4. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "    console.log('Saved access_token and refresh_token to collection variables.');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"MyPassword123\"\n}"
+            },
+            "description": "On success, automatically stores access_token/refresh_token as collection variables for every other request to use."
+          }
+        },
+        {
+          "name": "5. Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', body.access_token);",
+                  "    pm.collectionVariables.set('refresh_token', body.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "6. Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/forgot-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signup_email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "7. Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/auth/reset-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"otp_code\": \"{{otp_code}}\",\n  \"new_password\": \"MyNewPassword123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "8. Google Login (open in browser, not Postman)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{base_url}}/auth/google/login",
+            "description": "This redirects to Google's consent screen -- paste this URL into a real browser tab, not Postman's Send button, since it needs real browser-based Google login."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": { "method": "GET", "url": "{{base_url}}/users/me" }
+        },
+        {
+          "name": "List All Users (admin)",
+          "request": { "method": "GET", "url": "{{base_url}}/users/" }
+        },
+        {
+          "name": "Update User Role (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/users/{{user_id}}/role",
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"admin\"\n}" }
+          }
+        },
+        {
+          "name": "Update User Status (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/users/{{user_id}}/status",
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": false\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SMTP Credentials",
+      "item": [
+        {
+          "name": "Save SMTP Credentials",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/smtp-credentials/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"smtp_server\": \"smtp.gmail.com\",\n  \"smtp_port\": 587,\n  \"email_address\": \"your-gmail@gmail.com\",\n  \"password\": \"your-16-char-app-password\"\n}"
+            },
+            "description": "password must be a Gmail App Password, not your real account password."
+          }
+        },
+        {
+          "name": "Get My SMTP Credentials",
+          "request": { "method": "GET", "url": "{{base_url}}/smtp-credentials/" }
+        }
+      ]
+    },
+    {
+      "name": "Email Templates",
+      "item": [
+        {
+          "name": "Create Template",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('template_id', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/email-template/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Default Template\",\n  \"subject\": \"{{ job_position }} | Inquiry - {{ applicant_name }}\",\n  \"content\": \"Hi {{ hr_name }}, I am {{ applicant_name }} interested in {{ job_position }}.\",\n  \"is_default\": true\n}"
+            },
+            "description": "subject/content use Jinja placeholders like {{ hr_name }}. Postman leaves {{ ... }} untouched when no collection/environment variable by that exact name exists, so these pass through as literal Jinja syntax -- just don't ever name a collection variable job_position/applicant_name/hr_name or Postman would substitute it instead."
+          }
+        },
+        {
+          "name": "List My Templates",
+          "request": { "method": "GET", "url": "{{base_url}}/email-template/" }
+        },
+        {
+          "name": "Set Template As Default",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/email-template/{{template_id}}/set-default"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resumes",
+      "item": [
+        {
+          "name": "Upload Resume",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('resume_id', pm.response.json().id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/resumes/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "description": "In Postman, click the 'file' field's value and select a real PDF from your computer -- the src path can't be pre-filled in an exported collection."
+          }
+        },
+        {
+          "name": "List My Resumes",
+          "request": { "method": "GET", "url": "{{base_url}}/resumes/" }
+        },
+        {
+          "name": "Set Resume As Active",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/resumes/{{resume_id}}/set-active"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Email",
+      "item": [
+        {
+          "name": "Send Cold Emails (bulk, background)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const ids = pm.response.json().request_ids;",
+                  "    if (ids && ids.length) { pm.collectionVariables.set('request_id', ids[0]); }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/email/send-cold",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_position\": \"Backend Developer\",\n  \"experience_years\": 2,\n  \"skills\": [\"Python\", \"FastAPI\"],\n  \"email\": \"{{signup_email}}\",\n  \"contact_number\": \"9999999999\",\n  \"applicant_name\": \"Test User\",\n  \"linkedin_url\": \"https://linkedin.com/in/test\"\n}"
+            },
+            "description": "Requires SMTP credentials, a default template, and an active resume to already be configured. Returns 202 immediately; check /email/transactions for results."
+          }
+        },
+        {
+          "name": "Send Email To Individual HR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('request_id', pm.response.json().request_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/email/send-to-hr",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hr_name\": \"Jane Recruiter\",\n  \"hr_email\": \"jane@example.com\",\n  \"company_name\": \"Acme Corp\",\n  \"job_position\": \"Backend Developer\",\n  \"experience_years\": 2,\n  \"skills\": [\"Python\", \"FastAPI\"],\n  \"email\": \"{{signup_email}}\",\n  \"contact_number\": \"9999999999\",\n  \"applicant_name\": \"Test User\",\n  \"linkedin_url\": \"https://linkedin.com/in/test\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Transaction By Request ID",
+          "request": { "method": "GET", "url": "{{base_url}}/email/transactions/{{request_id}}" }
+        },
+        {
+          "name": "List My Transactions",
+          "request": { "method": "GET", "url": "{{base_url}}/email/transactions?limit=50&offset=0" }
+        }
+      ]
+    },
+    {
+      "name": "HR Contacts (admin writes, any-user reads)",
+      "item": [
+        {
+          "name": "Upload HR Contacts File (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/hr-contacts/v2/upload-file",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "description": "Select a real .xlsx/.csv file in Postman's file picker before sending."
+          }
+        },
+        {
+          "name": "Add Single HR Contact (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/hr-contacts/v2/add",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HR Contact Name\",\n  \"email\": \"hrcontact@example.com\",\n  \"additional_emails\": [],\n  \"title\": \"Technical Recruiter\",\n  \"company_name\": \"Acme Corp\",\n  \"contact_number\": \"9876543210\",\n  \"additional_phones\": []\n}"
+            }
+          }
+        },
+        {
+          "name": "Bulk Add HR Contacts (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/hr-contacts/v2/bulk-add",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contacts\": [\n    {\n      \"name\": \"HR One\",\n      \"email\": \"hr1@example.com\",\n      \"additional_emails\": [],\n      \"title\": \"Recruiter\",\n      \"company_name\": \"Acme\",\n      \"contact_number\": \"9876543210\",\n      \"additional_phones\": []\n    },\n    {\n      \"name\": \"HR Two\",\n      \"email\": \"hr2@example.com\",\n      \"additional_emails\": [],\n      \"title\": \"Recruiter\",\n      \"company_name\": \"Beta\",\n      \"contact_number\": \"9123456780\",\n      \"additional_phones\": []\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "List HR Contacts (any logged-in user)",
+          "request": { "method": "GET", "url": "{{base_url}}/hr-contacts/v2/list" }
+        }
+      ]
+    },
+    {
+      "name": "Company (admin)",
+      "item": [
+        {
+          "name": "Add Company Details",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/company/add-company-details",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"HR Name\",\n  \"email\": \"hr@company.com\",\n  \"title\": \"Talent Acquisition\",\n  \"company_name\": \"Acme Corp\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

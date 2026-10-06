@@ -23,17 +23,26 @@
             Therefore, request_id is generated inside the email transaction loop, not once at the API controller level. 
     =============================================================================== """
 
+import asyncio
 import uuid
 import smtplib
-from jinja2 import Environment, FileSystemLoader
+from fastapi import HTTPException, status
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 from pathlib import Path
 import os 
+from sqlalchemy import select
 from app.core.mailer import send_email
-from app.core.config import RESUME_PATH, TEMPLATE_DIR, USE_DUMMY_HR, BASE_DIR, linkedin_1, linkedin_2, LINKEDIN_URL
+from app.core.config import RESUME_PATH, TEMPLATE_DIR, USE_DUMMY_HR, BASE_DIR, linkedin_1, linkedin_2
+from app.database.database import AsyncSessionLocal
+from app.models.models import UserSMTPCredential, UserEmailTemplate, UserResume
+from app.core.encryption import decrypt_value
+from app.core.s3_storage import s3_storage
 from app.database.repositories import get_all_fresh_recruiters, create_email_transaction 
 from app.services.email_logger import log_email
 from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest
 from common.Logger import Logger
+
 
 # -----------------------------------------------------------------------------
 # Jinja2 Environment Setup
@@ -58,20 +67,97 @@ logger = Logger.get_logger()
 # environment configuration is common to all emails. 
 # TEMPLATE_DIR points to the directory containing our email templates.
 
-env = Environment(
-    loader=FileSystemLoader(TEMPLATE_DIR),
-    autoescape=False
+# env = Environment(
+#     loader=FileSystemLoader(TEMPLATE_DIR),
+#     autoescape=False
+# )
+
+env = SandboxedEnvironment(
+    loader = FileSystemLoader(TEMPLATE_DIR),
+    autoescape = False
 )
 
-
-def render_cold_email(context: dict) -> str:
+async def get_user_smtp_config(user_id: int)-> UserSMTPCredential:
     """
-    Renders the Jinja2 email template (`cold-email-v2.j2`) with the provided context parameters.
-
-    Context Keys Expected:
-    - hr_name, company_name, job_position, experience_years, skills, email, contact_number, applicant_name, linkedin_url
+    Featches and returns the given user's SMTP credentual row.
+    Raises 400 if user hasn't configured  their own SMTP sender
+    yet -- cold emails are always sent from the user's own account,
+    never a shared/global one.
     """
-    template = env.get_template("cold-email-v2.j2")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(UserSMTPCredential).where(UserSMTPCredential.user_id == user_id)
+        )
+
+        credential = result.scalar_one_or_none()
+
+        if credential is None or not credential.is_active:
+            raise HTTPException(
+                status_code= status.HTTP_400_BAD_REQUEST,
+                detail= "SMTP credential not configured. Please set them up before sending emails."
+            )
+
+        return credential
+
+async def get_user_default_template(user_id: int) -> UserEmailTemplate:
+    """
+    Featches the given user's default template. Raise 400 if 
+    the user hasn't created/marked one yet -- cold emails required a 
+    pre-user template, these is no shared fallback.
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(UserEmailTemplate).where(
+                UserEmailTemplate.user_id == user_id,
+                UserEmailTemplate.is_default == True,
+            )
+        )
+        template = result.scalars().first()
+
+    if template is None:
+        raise HTTPException(
+            status_code= status.HTTP_400_BAD_REQUEST,
+            detail= "No default email template configured. Please create one before sending emails."
+        )
+
+    return template
+
+
+async def get_user_active_resume(user_id :int)->bytes:
+    """
+    Fetches the given user's active resume from s3 and returns its raw 
+    bytes. Raises 400 if the user han's uploaded/activated one yet --
+    cold emails require a pre-user resume, there is no shared fallback.
+    """
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(UserResume).where(
+                UserResume.user_id == user_id,
+                UserResume.is_active == True,
+            )
+        )
+        resume = result.scalars().first()
+
+    if resume is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail= "No active resume found. Please uplaod one before sending emails."
+        )
+
+    return s3_storage.download_file(resume.file_path)
+        
+        
+
+def render_cold_email(content: str,context: dict) -> str:
+    """
+    Renders a user-supplied Jinja template string (from the database)
+    with the provided context parameters -- replaces the old
+    hardcoded file based template.
+    """
+    #template = env.get_template("cold_email.j2")
+    template = env.from_string(content)
     return template.render(**context)
 
 
@@ -110,102 +196,219 @@ def classify_email_exception(e: Exception) -> tuple[str, str]:
     return error_code, error_details
 
 
-async def send_cold_emails(payload: JobApplicationEmailRequest):
+# async def send_cold_emails(payload: JobApplicationEmailRequest,user_id:int):
+#     """
+#     Mass Cold Email Dispatcher:
+#     ---------------------------
+#     Fetches all recruiters from `hr_contacts_v2`, renders personalized templates,
+#     dispatches emails over SMTP, and persists unique request IDs & transaction states.
+#     """
+#     smtp_credential = await get_user_smtp_config(user_id)
+#     smtp_password = decrypt_value(smtp_credential.encrypted_password)
+#     email_template = await get_user_default_template(user_id)
+#     resume_bytes = await get_user_active_resume(user_id)
+
+#     if USE_DUMMY_HR:
+#         class DummyHR:
+#             def __init__(self, name, email, company=None):
+#                 self.name = name
+#                 self.email = email 
+#                 self.company = company
+        
+#         recruiters = [
+#             DummyHR("Saurabh Amrutkar", "saurabhamrutkar83@gmail.com", "Tech Solutions"),
+#         ]
+#     else:
+#         recruiters = await get_all_fresh_recruiters()
+
+#     sent = 0
+#     failed = 0
+#     request_ids = []
+
+#     for hr in recruiters:
+#         # Generate a unique UUID request_id for each email transaction
+#         request_id = str(uuid.uuid4())
+#         request_ids.append(request_id)
+
+#         try:
+#             # Render Jinja email template
+#             context = {
+#                 "hr_name": getattr(hr, 'name', 'Hiring Manager') or 'Hiring Manager',
+#                 "company_name": getattr(hr, 'company', None),
+#                 "job_position": payload.job_position,
+#                 "experience_years": payload.experience_years,
+#                 "skills": payload.skills,
+#                 "email": payload.email,
+#                 "contact_number": payload.contact_number,
+#                 "applicant_name": payload.applicant_name,
+#                 "linkedin_url": payload.linkedin_url
+#             }
+
+#             body = render_cold_email(email_template.content,context)
+
+#             if email_template.subject:
+#                 subject = render_cold_email(email_template.subject,context)
+#             else:
+#                 subject = f"{payload.job_position} | Inquiry About Openings - {payload.applicant_name}"
+
+#             # Send email with resume attachment
+#                 await asyncio.to_thread(
+#                 send_email,
+#                 to_email=hr.email,
+#                 subject=subject,
+#                 body=body,
+#                 byte_attachments=[{"filename": "resume.pdf", "content": resume_bytes}],
+#                 smtp_server=smtp_credential.smtp_server,
+#                 smtp_port= smtp_credential.smtp_port,
+#                 email_address= smtp_credential.email_address,
+#                 email_password=smtp_password
+#             )
+
+#             # Log success to JSONL file and database transaction table
+#             log_email(hr.email, "SUCCESS")
+#             await create_email_transaction(
+#                 request_id=request_id,
+#                 recipient_email=hr.email,
+#                 status="SUCCESS",
+#                 response_details="Email sent successfully via SMTP",
+#                 user_id=user_id
+#             )
+#             sent += 1
+
+#         except Exception as e:
+#             # Classify error and record failure details
+#             error_code, error_details = classify_email_exception(e)
+#             log_email(hr.email, "FAILED", error_details)
+#             await create_email_transaction(
+#                 request_id=request_id,
+#                 recipient_email=hr.email,
+#                 status="FAILED",
+#                 error_code=error_code,
+#                 response_details=error_details,
+#                 user_id=user_id
+#             )
+#             failed += 1
+
+#     return {
+#         "total": len(recruiters),
+#         "sent": sent,
+#         "failed": failed,
+#         "request_ids": request_ids
+#     }
+
+
+async def get_recruiters_for_sending():
     """
-    Mass Cold Email Dispatcher:
-    ---------------------------
-    Fetches all recruiters from `hr_contacts_v2`, renders personalized templates,
-    dispatches emails over SMTP, and persists unique request IDs & transaction states.
+    Returns the list of HR recruiter contacts to send cold emails to --
+    the hardcoded dummy recruiter when USE_DURRM_HR is enabled (testing
+    safeground), otherwise the real list from hr_contacts_v2
     """
     if USE_DUMMY_HR:
         class DummyHR:
-            def __init__(self, name, email, company=None):
+            def __init__(self,name,email,company=None):
                 self.name = name
                 self.email = email 
                 self.company = company
-        
-        recruiters = [
-            DummyHR("Saurabh Amrutkar", "saurabhamrutkar83@gmail.com", "Tech Solutions"),
-        ]
+
+        return [DummyHR("Saurabh Amrutkar", "saurabhamrutkar83@gmail.com","Tech Solutions")]
+
     else:
-        recruiters = await get_all_fresh_recruiters()
+        return await get_all_fresh_recruiters()
 
-    subject = f"{payload.job_position} | Inquiry About Openings - {payload.applicant_name}"
-    sent = 0
-    failed = 0
-    request_ids = []
 
-    for hr in recruiters:
-        # Generate a unique UUID request_id for each email transaction
-        request_id = str(uuid.uuid4())
-        request_ids.append(request_id)
-
+async def send_cold_emails_background(
+        payload: JobApplicationEmailRequest,
+        user_id : int,
+        recruiters : list,
+        request_ids : list,
+        smtp_credential: UserSMTPCredential,
+        smtp_password : str,
+        email_template: UserEmailTemplate,
+        resume_bytes: bytes,
+)->None:
+    """
+    Background version of cold-email dispatcher. All prerequisite
+    data (SMTP creds, template, resume, recruiter list, pre-generated
+    request_ids) is fetched by the caller (the API endpoint) BEFORE
+    queuing this as a background task -- this function only does the
+    actual pre-recruiter send + transaction-recording loop. No one is
+    listening for an HTTP response by the time this runs, so it never 
+    raises -- every outcome (success or failure) is recorded as an 
+    EmailTransaction instead. 
+    """
+    for hr, request_id in zip(recruiters, request_ids):
         try:
-            # Render Jinja email template
-            body = render_cold_email({
+            context = {
                 "hr_name": getattr(hr, 'name', 'Hiring Manager') or 'Hiring Manager',
-                "company_name": getattr(hr, 'company', None),
+                "company_name": getattr(hr,'company',None),
                 "job_position": payload.job_position,
                 "experience_years": payload.experience_years,
                 "skills": payload.skills,
                 "email": payload.email,
                 "contact_number": payload.contact_number,
                 "applicant_name": payload.applicant_name,
-                "linkedin_url": LINKEDIN_URL
-            })
+                "linkedin_url": payload.linkedin_url
+            } 
 
-            # Send email with resume attachment
-            send_email(
+            body = render_cold_email(email_template.content, context)
+
+            if email_template.subject:
+                subject = render_cold_email(email_template.subject, context)
+            else:
+                subject = f"{payload.job_position} | Inquiry About Openings - {payload.applicant_name}"
+
+            await asyncio.to_thread(
+                send_email,
                 to_email=hr.email,
-                subject=subject,
-                body=body,
-                attachments=[RESUME_PATH]
+                subject = subject,
+                body = body,
+                byte_attachments= [{"filename": "resume.pdf", "content": resume_bytes}],
+                smtp_server = smtp_credential.smtp_server,
+                smtp_port= smtp_credential.smtp_port,
+                email_address=smtp_credential.email_address,
+                email_password=smtp_password
             )
 
-            # Log success to JSONL file and database transaction table
             log_email(hr.email, "SUCCESS")
             await create_email_transaction(
-                request_id=request_id,
-                recipient_email=hr.email,
-                status="SUCCESS",
-                response_details="Email sent successfully via SMTP"
+                request_id= request_id,
+                recipient_email = hr.email,
+                status = "SUCCESS",
+                response_details = "Email sent successfully vai SMTP",
+                user_id=user_id
             )
-            sent += 1
 
         except Exception as e:
-            # Classify error and record failure details
             error_code, error_details = classify_email_exception(e)
             log_email(hr.email, "FAILED", error_details)
             await create_email_transaction(
                 request_id=request_id,
                 recipient_email=hr.email,
-                status="FAILED",
+                status= "FAILED",
                 error_code=error_code,
-                response_details=error_details
+                response_details=error_details,
+                user_id=user_id
             )
-            failed += 1
-
-    return {
-        "total": len(recruiters),
-        "sent": sent,
-        "failed": failed,
-        "request_ids": request_ids
-    }
 
 
-async def send_email_to_individual(payload: SingleHREmailRequest):
+                
+
+
+async def send_email_to_individual(payload: SingleHREmailRequest,user_id:int):
     """
     Direct Targeted Cold Email Dispatcher:
     --------------------------------------
     Sends a targeted job application email to a specific individual HR contact.
     Generates a unique request_id and returns transaction status.
     """
-    subject = f"{payload.job_position} | Inquiry About Openings - {payload.applicant_name}"
+    smtp_credential = await get_user_smtp_config(user_id)
+    smtp_password = decrypt_value(smtp_credential.encrypted_password)
+    email_template = await get_user_default_template(user_id)
+    resume_bytes = await get_user_active_resume(user_id)
     request_id = str(uuid.uuid4())
 
     try:
-        # Render Jinja template
-        body = render_cold_email({
+        context = {
             "hr_name": payload.hr_name,
             "company_name": payload.company_name,
             "job_position": payload.job_position,
@@ -214,15 +417,28 @@ async def send_email_to_individual(payload: SingleHREmailRequest):
             "email": payload.email,
             "contact_number": payload.contact_number,
             "applicant_name": payload.applicant_name,
-            "linkedin_url": LINKEDIN_URL
-        })
+            "linkedin_url": payload.linkedin_url
+        }
+
+        body = render_cold_email(email_template.content,context)
+
+        if email_template.subject:
+            subject = render_cold_email(email_template.subject,context)
+        else:
+            subject = f"{payload.job_position} | Inquiry About Openings - {payload.applicant_name}"
+
 
         # Transmit email over SMTP
-        send_email(
+        await asyncio.to_thread(
+            send_email,
             to_email=payload.hr_email,
             subject=subject,
             body=body,
-            attachments=[RESUME_PATH]
+            byte_attachments=[{"filename": "resume.pdf", "content":resume_bytes}],
+            smtp_server= smtp_credential.smtp_server,
+            smtp_port= smtp_credential.smtp_port,
+            email_address= smtp_credential.email_address,
+            email_password= smtp_password
         )
 
         # Record success
@@ -231,7 +447,8 @@ async def send_email_to_individual(payload: SingleHREmailRequest):
             request_id=request_id,
             recipient_email=payload.hr_email,
             status="SUCCESS",
-            response_details="Email sent successfully via SMTP"
+            response_details="Email sent successfully via SMTP",
+            user_id=user_id
         )
         return {
             "request_id": request_id,
@@ -248,7 +465,8 @@ async def send_email_to_individual(payload: SingleHREmailRequest):
             recipient_email=payload.hr_email,
             status="FAILED",
             error_code=error_code,
-            response_details=error_details
+            response_details=error_details,
+            user_id=user_id
         )
         return {
             "request_id": request_id,

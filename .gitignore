@@ -22,6 +22,7 @@ logs/
 *.pdf
 *.xlsx
 *.zip
+*.sql
 # OS files
 .DS_Store
 Thumbs.db

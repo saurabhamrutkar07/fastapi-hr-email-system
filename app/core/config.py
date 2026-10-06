@@ -54,3 +54,54 @@ ADMIN_KEY = os.getenv("ADMIN_KEY", None)
 if not ADMIN_KEY:
     raise RuntimeError("Admin key is not set. Please specify ADMIN_KEY in your .env file.")
 
+
+
+# -----------------------------------------------------------------------------
+# AUTH / JWT / OTP Configuration
+# -----------------------------------------------------------------------------
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", None)
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", 10))
+SIGNUP_TOKEN_EXPIRE_MINUTES = int(os.getenv("SIGNUP_TOKEN_EXPIRE_MINUTES", 15))
+OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", 5))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", None)
+
+# -----------------------------------------------------------------------------
+# AWS S3 Configuration (Resume Storage)
+# -----------------------------------------------------------------------------
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", None)
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
+AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", None)
+
+# Ensure application refuses to start if S3 credentials are missing
+if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not S3_BUCKET_NAME:
+    raise RuntimeError("AWS S3 credentials are not fully set. Please specify AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME in your .env file.")
+
+
+
+# Ensure application refuses to start if JWT SECRET KEY environment variable is missing
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT secret key is not set. Please specify JWT_SECRET_KEY in your .env file.")
+
+# Ensure application refuses to start if ENCRYPTION_KEY environment variable is missing
+if not ENCRYPTION_KEY:
+    raise RuntimeError("Encryption key is not set. Please specify ENCRYPTION_KEY in your .env file.")
+
+
+# -----------------------------------------------------------------------------
+# Google OAuth Configuration
+# -----------------------------------------------------------------------------
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID",None)
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", None)
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI",None)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# Ensure application refuses to start if Google OAuth credentials are missing
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET or not GOOGLE_REDIRECT_URI:
+    raise RuntimeError("Google OAuth credentials are not fully set. Please specify GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI in your .env file.")
+
+

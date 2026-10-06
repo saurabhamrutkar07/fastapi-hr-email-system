@@ -33,13 +33,23 @@ async def import_hr_contact_from_pdf(file: UploadFile):
             "message": "No valid HR contact entries could be extracted from the provided PDF."
         }
 
-    # Bulk insert extracted records into database
-    inserted_count = await add_fresh_hr_contact_bulk(extracted_data)
+    # Bulk insert extracted records into database.
+    # `add_fresh_hr_contact_bulk` now returns a dict, not a plain count,
+    # because some records may get merged into an already-existing
+    # contact instead of creating a new one (duplicate email/phone) --
+    # see `find_existing_contact_by_email_or_phone()` in repositories.py.
+    counts = await add_fresh_hr_contact_bulk(extracted_data)
+    total_processed = counts["created_count"] + counts["merged_count"]
 
     return {
         "status": "success",
-        "inserted": inserted_count,
-        "message": f"Successfully parsed and imported {inserted_count} HR contacts from PDF."
+        "inserted": total_processed,
+        "created_count": counts["created_count"],
+        "merged_count": counts["merged_count"],
+        "message": (
+            f"Successfully parsed and imported {total_processed} HR contacts from PDF "
+            f"({counts['created_count']} new, {counts['merged_count']} merged into existing contacts)."
+        )
     }
 
 

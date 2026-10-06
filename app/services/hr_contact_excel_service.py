@@ -7,7 +7,9 @@ import pandas as pd
 
 from pydantic import ValidationError
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import (
     HRContactsV2,
@@ -605,9 +607,9 @@ def build_contacts_from_excel(
 # Find existing contact
 # ============================================================
 
-def find_existing_contact(
+async def find_existing_contact(
     contact: ExcelContact,
-    db: Session,
+    db: AsyncSession,
 ):
 
     # Search using any email belonging to the contact.
@@ -618,29 +620,43 @@ def find_existing_contact(
         # Search normalized email table
         # ----------------------------------------------------
 
-        existing_email = (
-            db.query(HRContactEmail)
-            .filter(
+        result = await db.execute(
+            select(HRContactEmail).where(
                 HRContactEmail.email == email
             )
-            .first()
         )
+
+        existing_email = result.scalar_one_or_none()
 
         if existing_email:
 
-            return existing_email.contact
+            # We deliberately run a SECOND query here instead of
+            # accessing `existing_email.contact` (the relationship).
+            #
+            # AsyncSession does not support implicit lazy-loading --
+            # touching an unloaded relationship attribute without an
+            # explicit await raises `MissingGreenlet`. Querying
+            # HRContactsV2 directly by id avoids that trap entirely.
+
+            result = await db.execute(
+                select(HRContactsV2).where(
+                    HRContactsV2.id == existing_email.contact_id
+                )
+            )
+
+            return result.scalar_one_or_none()
 
         # ----------------------------------------------------
         # Search old HRContactsV2.email column
         # ----------------------------------------------------
 
-        existing_contact = (
-            db.query(HRContactsV2)
-            .filter(
+        result = await db.execute(
+            select(HRContactsV2).where(
                 HRContactsV2.email == email
             )
-            .first()
         )
+
+        existing_contact = result.scalar_one_or_none()
 
         if existing_contact:
 
@@ -653,159 +669,207 @@ def find_existing_contact(
 # Save contacts
 # ============================================================
 
-def save_contacts(
+async def save_contacts(
     contacts: list[ExcelContact],
-    db: Session,
+    db: AsyncSession,
 ):
 
     created_contacts = 0
     existing_contacts = 0
     emails_added = 0
     phones_added = 0
+    save_errors = []
+
+    for contact_data in contacts:
+
+        # ----------------------------------------------------
+        # Each contact gets its own SAVEPOINT.
+        #
+        # If saving this contact fails, only this contact's
+        # changes are rolled back -- everything already
+        # committed to earlier savepoints in this loop, and
+        # the outer transaction itself, are unaffected.
+        # ----------------------------------------------------
+
+        try:
+
+            # `async with` is required here (not plain `with`) --
+            # AsyncSession.begin_nested() returns an async context
+            # manager. Using plain `with` would raise immediately.
+
+            async with db.begin_nested():
+
+                local_created = 0
+                local_existing = 0
+                local_emails = 0
+                local_phones = 0
+
+                # ------------------------------------------------
+                # Find existing contact
+                # ------------------------------------------------
+
+                contact = await find_existing_contact(
+                    contact_data,
+                    db,
+                )
+
+                # =================================================
+                # Existing contact
+                # =================================================
+
+                if contact:
+
+                    local_existing = 1
+
+                # =================================================
+                # New contact
+                # =================================================
+
+                else:
+
+                    # First email becomes the legacy
+                    # primary email.
+
+                    primary_email = (
+                        contact_data.emails[0]
+                    )
+
+                    # Phone is optional.
+                    #
+                    # If no phone exists, this becomes None.
+
+                    primary_phone = (
+                        contact_data.phones[0]
+                        if contact_data.phones
+                        else None
+                    )
+
+                    contact = HRContactsV2(
+                        name=contact_data.name,
+                        email=primary_email,
+                        phone=primary_phone,
+                        company=contact_data.company,
+                        title=contact_data.position,
+                    )
+
+                    db.add(contact)
+
+                    # Get generated contact.id
+                    await db.flush()
+
+                    local_created = 1
+
+                # =================================================
+                # Emails
+                # =================================================
+
+                for index, email in enumerate(
+                    contact_data.emails
+                ):
+
+                    result = await db.execute(
+                        select(HRContactEmail).where(
+                            HRContactEmail.email == email
+                        )
+                    )
+
+                    existing_email = result.scalar_one_or_none()
+
+                    if existing_email:
+
+                        continue
+
+                    db.add(
+                        HRContactEmail(
+                            contact_id=contact.id,
+                            email=email,
+                            is_primary=(
+                                index == 0
+                            ),
+                        )
+                    )
+
+                    local_emails += 1
+
+                # =================================================
+                # Phones
+                # =================================================
+
+                for index, phone in enumerate(
+                    contact_data.phones
+                ):
+
+                    result = await db.execute(
+                        select(HRContactPhone).where(
+                            HRContactPhone.phone == phone
+                        )
+                    )
+
+                    existing_phone = result.scalar_one_or_none()
+
+                    if existing_phone:
+
+                        continue
+
+                    db.add(
+                        HRContactPhone(
+                            contact_id=contact.id,
+                            phone=phone,
+                            is_primary=(
+                                index == 0
+                            ),
+                        )
+                    )
+
+                    local_phones += 1
+
+            # Reached only if the savepoint block above committed
+            # without raising -- safe to fold the local counts into
+            # the running totals now.
+
+            created_contacts += local_created
+            existing_contacts += local_existing
+            emails_added += local_emails
+            phones_added += local_phones
+
+        except Exception as exc:
+
+            # The savepoint already rolled back this contact's
+            # own changes. The outer transaction (and every
+            # previously saved contact) is untouched, so we just
+            # record the failure and move on to the next contact.
+
+            save_errors.append(
+                {
+                    "name": contact_data.name,
+                    "error": f"Failed to save contact: {exc}",
+                }
+            )
+
+            continue
+
+    # ----------------------------------------------------
+    # Commit everything that succeeded
+    # ----------------------------------------------------
 
     try:
 
-        for contact_data in contacts:
-
-            # ------------------------------------------------
-            # Find existing contact
-            # ------------------------------------------------
-
-            contact = find_existing_contact(
-                contact_data,
-                db,
-            )
-
-            # =================================================
-            # Existing contact
-            # =================================================
-
-            if contact:
-
-                existing_contacts += 1
-
-            # =================================================
-            # New contact
-            # =================================================
-
-            else:
-
-                # First email becomes the legacy
-                # primary email.
-
-                primary_email = (
-                    contact_data.emails[0]
-                )
-
-                # Phone is optional.
-                #
-                # If no phone exists, this becomes None.
-
-                primary_phone = (
-                    contact_data.phones[0]
-                    if contact_data.phones
-                    else None
-                )
-
-                contact = HRContactsV2(
-                    name=contact_data.name,
-                    email=primary_email,
-                    phone=primary_phone,
-                    company=contact_data.company,
-                    title=contact_data.position,
-                )
-
-                db.add(contact)
-
-                # Get generated contact.id
-                db.flush()
-
-                created_contacts += 1
-
-            # =================================================
-            # Emails
-            # =================================================
-
-            for index, email in enumerate(
-                contact_data.emails
-            ):
-
-                existing_email = (
-                    db.query(HRContactEmail)
-                    .filter(
-                        HRContactEmail.email == email
-                    )
-                    .first()
-                )
-
-                if existing_email:
-
-                    continue
-
-                db.add(
-                    HRContactEmail(
-                        contact_id=contact.id,
-                        email=email,
-                        is_primary=(
-                            index == 0
-                        ),
-                    )
-                )
-
-                emails_added += 1
-
-            # =================================================
-            # Phones
-            # =================================================
-
-            for index, phone in enumerate(
-                contact_data.phones
-            ):
-
-                existing_phone = (
-                    db.query(HRContactPhone)
-                    .filter(
-                        HRContactPhone.phone == phone
-                    )
-                    .first()
-                )
-
-                if existing_phone:
-
-                    continue
-
-                db.add(
-                    HRContactPhone(
-                        contact_id=contact.id,
-                        phone=phone,
-                        is_primary=(
-                            index == 0
-                        ),
-                    )
-                )
-
-                phones_added += 1
-
-        # ----------------------------------------------------
-        # Commit the complete file
-        # ----------------------------------------------------
-
-        db.commit()
-
-        return {
-            "status": "success",
-            "created_contacts": created_contacts,
-            "existing_contacts": existing_contacts,
-            "emails_added": emails_added,
-            "phones_added": phones_added,
-        }
+        await db.commit()
 
     except Exception:
 
-        # Roll back the complete upload.
-        db.rollback()
+        await db.rollback()
 
         raise
+
+    return {
+        "status": "success",
+        "created_contacts": created_contacts,
+        "existing_contacts": existing_contacts,
+        "emails_added": emails_added,
+        "phones_added": phones_added,
+        "save_errors": save_errors,
+    }
 
 
 # ============================================================
@@ -815,7 +879,7 @@ def save_contacts(
 async def process_hr_contacts_file(
     contents: bytes,
     filename: str,
-    db: Session,
+    db: AsyncSession,
 ):
 
     extension = get_file_extension(
@@ -878,7 +942,7 @@ async def process_hr_contacts_file(
     # Save
     # --------------------------------------------------------
 
-    result = save_contacts(
+    result = await save_contacts(
         contacts,
         db,
     )
@@ -887,19 +951,27 @@ async def process_hr_contacts_file(
     # Final response
     # --------------------------------------------------------
 
+    # Errors can come from two independent stages:
+    #   - parsing/validation errors (rows dropped before saving)
+    #   - save_errors (contacts that failed their own SAVEPOINT
+    #     during save_contacts, see there for details)
+
+    save_errors = result.pop("save_errors", [])
+    all_errors = errors + save_errors
+
     result.update(
         {
             "status": (
                 "partial_success"
-                if errors
+                if all_errors
                 else "success"
             ),
             "file_name": filename,
             "file_type": extension,
             "total_rows": len(df),
             "valid_contacts": len(contacts),
-            "skipped_contacts": len(errors),
-            "errors": errors,
+            "skipped_contacts": len(all_errors),
+            "errors": all_errors,
         }
     )
 

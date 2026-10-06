@@ -2,24 +2,23 @@ Hi {{ hr_name }},
 
 I hope you are doing well.
 
-I am writing to express my strong interest in the {{ job_position }} role{% if company_name %} at {{ company_name }}{% endif %}. With {{ experience_years }}+ years of hands-on experience in backend development, I specialize in building robust RESTful APIs, scalable microservices, and high-performance Python applications.
+I wanted to reach out and check if there are any current openings{% if company_name %} at {{ company_name }}{% endif %}{% if job_position %} around {{ job_position }}{% endif %} that I could be a good fit for.
 
-Here is a summary of my technical expertise and skills:
+{% if skills %}
+I have {{ experience_years if experience_years is not none else '3' }}+ years of experience working with:
 {% for skill in skills %}
 • {{ skill }}
 {% endfor %}
+{% endif %}
 
-Why I would be a great fit:
-- Proven experience with core Python, web frameworks, database optimization, and API design.
-- Passionate about writing clean, maintainable code and solving complex technical problems.
-- Eager to collaborate with engineering teams to build high-quality solutions.
+I am actively looking for a new opportunity right now, and it would mean a lot if you could consider me for any suitable role on your team, or point me toward someone who might be hiring. I've attached my resume for your reference.
 
-I have attached my resume for your review. I would welcome the opportunity for a brief call to discuss how my background aligns with your team's needs.
+Thank you so much for taking the time to read this — I'd really appreciate hearing back from you, even if there's nothing open at the moment.
 
 Contact Information:
 • Email: {{ email }}
 • Phone: {{ contact_number }}
 {% if linkedin_url %}• LinkedIn: {{ linkedin_url }}{% endif %}
 
-Best regards,
-{{ applicant_name }}
+Warm regards,
+{{ applicant_name }}

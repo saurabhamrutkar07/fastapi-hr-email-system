@@ -13,14 +13,14 @@ All routes require valid `key-secret` header authentication.
 from fastapi import APIRouter, Depends
 from app.schemas.company import AddCompanyDetailsRequest
 from app.services.company_service import create_company_contact
-from app.core.security import verify_key_secret
+from app.core.security import require_admin
 from common.Logger import Logger
 
 logger = Logger.get_logger()
 
 # Initialize Router with Security Dependency
 router = APIRouter(
-    dependencies=[Depends(verify_key_secret)]
+    dependencies=[Depends(require_admin)]
 )
 
 
