@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Light theme (default) */
+:root {
+  --bg: #F8FAFC;  --surface: #FFFFFF;  --surface-2: #F1F5F9;  --line: #E2E8F0;
+  --fg: #0F172A;  --muted: #64748B;
+  --brand: #1E3A8A;  --brand-soft: #E5EBF8;  --brand-ink: #1E3A8A;
+  --primary: #2563EB;  --primary-soft: #DBEAFE;  --link: #2563EB;
+  --accent: #0D9488;  --accent-soft: #CCFBF1;  --accent-text: #0F766E;
+  --ok: #16A34A;  --ok-text: #15803D;  --ok-soft: #DCFCE7;
+  --warn: #D97706;  --warn-text: #B45309;  --warn-soft: #FEF3C7;
+  --err: #DC2626;  --err-text: #B91C1C;  --err-soft: #FEE2E2;
+  --mark-bg: #1E3A8A;  --mark-fg: #FFFFFF;  --logo-dot: #0D9488;  --logo-arrow: #FFFFFF;
+  color-scheme: light;
+}
+
+/* Dark theme: same names, darker surfaces, lighter text/accents */
+[data-theme="dark"] {
+  --bg: #0B1120;  --surface: #111A2E;  --surface-2: #18233B;  --line: #253252;
+  --fg: #E2E8F0;  --muted: #94A3B8;
+  --brand: #A5B8F3;  --brand-soft: #1B2A55;  --brand-ink: #DCE4FB;
+  --primary: #3B82F6;  --primary-soft: #172A4F;  --link: #60A5FA;
+  --accent: #2DD4BF;  --accent-soft: #0F3B3A;  --accent-text: #5EEAD4;
+  --ok: #22C55E;  --ok-text: #4ADE80;  --ok-soft: #10301F;
+  --warn: #F59E0B;  --warn-text: #FBBF24;  --warn-soft: #3A2A0C;
+  --err: #EF4444;  --err-text: #F87171;  --err-soft: #3D1517;
+  --mark-bg: #2B4DB3;  --mark-fg: #FFFFFF;  --logo-dot: #2DD4BF;  --logo-arrow: #042F2E;
+  color-scheme: dark;
+}
+
+/* Turn the variables into Tailwind utilities: bg-surface, text-muted, border-line ... */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-link: var(--link);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-ok: var(--ok);
+  --color-ok-text: var(--ok-text);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-err: var(--err);
+  --color-err-text: var(--err-text);
+  --color-err-soft: var(--err-soft);
+  --color-mark-bg: var(--mark-bg);
+  --color-mark-fg: var(--mark-fg);
+  --color-logo-dot: var(--logo-dot);
+  --color-logo-arrow: var(--logo-arrow);
+
+
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+body {
+  @apply bg-bg text-fg font-sans antialiased;
+}
+
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
