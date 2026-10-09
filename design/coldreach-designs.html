@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>ColdReach UI Designs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: prototype toolbar + device stage. The app frame is a size container, so the
+   Desktop / Tablet / Mobile switch shows the real sidebar → rail → bottom-nav layouts.
+   Palette roles: brand navy = identity, nav, headings · primary blue = actions, links, focus ·
+   teal = secondary highlights · green / amber / red = sent / pending / failed. */
+:root{
+  --stage:#E9EEF5; --bg:#F8FAFC; --surface:#FFFFFF; --surface-2:#F1F5F9; --line:#E2E8F0;
+  --fg:#0F172A; --muted:#64748B;
+  --brand:#1E3A8A; --brand-soft:#E5EBF8; --brand-ink:#1E3A8A; --brand-panel:#1E3A8A;
+  --on-brand:#FFFFFF; --on-brand-muted:#C3CEEB; --on-brand-line:rgba(255,255,255,.16); --on-brand-card:rgba(255,255,255,.07); --on-brand-accent:#5EEAD4;
+  --mark-bg:#1E3A8A; --mark-fg:#FFFFFF; --logo-dot:#0D9488; --logo-arrow:#FFFFFF;
+  --primary:#2563EB; --primary-fg:#FFFFFF; --primary-soft:#DBEAFE; --link:#2563EB;
+  --accent:#0D9488; --accent-soft:#CCFBF1; --accent-text:#0F766E;
+  --ok:#16A34A; --ok-text:#15803D; --ok-soft:#DCFCE7;
+  --warn:#D97706; --warn-text:#B45309; --warn-soft:#FEF3C7;
+  --err:#DC2626; --err-text:#B91C1C; --err-soft:#FEE2E2;
+  --scrim:rgba(15,23,42,.45); --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 28px rgba(15,23,42,.07);
+  --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --body:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --stage:#050914; --bg:#0B1120; --surface:#111A2E; --surface-2:#18233B; --line:#253252;
+  --fg:#E2E8F0; --muted:#94A3B8;
+  --brand:#A5B8F3; --brand-soft:#1B2A55; --brand-ink:#DCE4FB; --brand-panel:#172C66;
+  --on-brand:#FFFFFF; --on-brand-muted:#B9C6EC; --on-brand-line:rgba(255,255,255,.14); --on-brand-card:rgba(255,255,255,.06); --on-brand-accent:#5EEAD4;
+  --mark-bg:#2B4DB3; --mark-fg:#FFFFFF; --logo-dot:#2DD4BF; --logo-arrow:#042F2E;
+  --primary:#3B82F6; --primary-fg:#FFFFFF; --primary-soft:#172A4F; --link:#60A5FA;
+  --accent:#2DD4BF; --accent-soft:#0F3B3A; --accent-text:#5EEAD4;
+  --ok:#22C55E; --ok-text:#4ADE80; --ok-soft:#10301F;
+  --warn:#F59E0B; --warn-text:#FBBF24; --warn-soft:#3A2A0C;
+  --err:#EF4444; --err-text:#F87171; --err-soft:#3D1517;
+  --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --stage:#050914; --bg:#0B1120; --surface:#111A2E; --surface-2:#18233B; --line:#253252;
+  --fg:#E2E8F0; --muted:#94A3B8;
+  --brand:#A5B8F3; --brand-soft:#1B2A55; --brand-ink:#DCE4FB; --brand-panel:#172C66;
+  --on-brand:#FFFFFF; --on-brand-muted:#B9C6EC; --on-brand-line:rgba(255,255,255,.14); --on-brand-card:rgba(255,255,255,.06); --on-brand-accent:#5EEAD4;
+  --mark-bg:#2B4DB3; --mark-fg:#FFFFFF; --logo-dot:#2DD4BF; --logo-arrow:#042F2E;
+  --primary:#3B82F6; --primary-fg:#FFFFFF; --primary-soft:#172A4F; --link:#60A5FA;
+  --accent:#2DD4BF; --accent-soft:#0F3B3A; --accent-text:#5EEAD4;
+  --ok:#22C55E; --ok-text:#4ADE80; --ok-soft:#10301F;
+  --warn:#F59E0B; --warn-text:#FBBF24; --warn-soft:#3A2A0C;
+  --err:#EF4444; --err-text:#F87171; --err-soft:#3D1517;
+  --scrim:rgba(0,0,0,.6); --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px rgba(0,0,0,.35); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--stage);color:var(--fg);font-family:var(--body);font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+h1,h2,h3{font-family:var(--display);color:var(--brand-ink);text-wrap:balance;margin:0;letter-spacing:-.01em}
+.mono{font-family:var(--mono);font-size:12.5px}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* prototype chrome */
+.proto{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.proto-l{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.proto h1{font-size:15px}
+.proto small{color:var(--muted);font-size:12px}
+.proto-r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--muted);padding:5px 11px;border-radius:7px;font-weight:600;font-size:12.5px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.proto select{background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:12.5px;font-weight:600;max-width:100%}
+.stage{padding:16px;display:flex;justify-content:center}
+.device{width:100%;max-width:1280px;height:clamp(560px,calc(100dvh - 110px),880px);container:app / inline-size;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:var(--shadow);transition:max-width .3s ease}
+.device[data-size="tablet"]{max-width:768px}
+.device[data-size="mobile"]{max-width:390px;border-radius:26px}
+
+/* app shell */
+.app{position:relative;height:100%;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;background:var(--bg)}
+.side{display:none}
+.top{grid-column:-2/-1;grid-row:1;display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);min-width:0}
+.main{grid-column:-2/-1;grid-row:2;overflow:auto;padding:20px 16px 28px;min-width:0}
+.bottom{grid-column:1/-1;grid-row:3;display:grid;grid-template-columns:repeat(5,1fr);background:var(--surface);border-top:1px solid var(--line)}
+.bottom button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 10px;border:0;background:none;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer}
+.bottom button[aria-current="page"]{color:var(--brand)}
+.icon-btn{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;flex:none}
+.icon-btn:hover{background:var(--surface-2)}
+.top-title{font-family:var(--display);font-weight:700;font-size:16px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-search{display:none;align-items:center;gap:8px;flex:1;max-width:420px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--muted)}
+.top-search input{border:0;background:transparent;padding:8px 0;width:100%;outline:none}
+.avatar{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-weight:700;font-size:12.5px;flex:none}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:700;font-size:17px;color:var(--brand-ink)}
+.logo{width:32px;height:32px;flex:none;display:block}
+.lg-bg{fill:var(--mark-bg)}
+.lg-env{fill:var(--mark-fg)}
+.lg-cut{fill:none;stroke:var(--mark-bg);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.lg-dot{fill:var(--logo-dot);stroke:var(--mark-bg);stroke-width:1.8}
+.lg-arrow{fill:none;stroke:var(--logo-arrow);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.brand-name b{font-weight:inherit;color:var(--primary)}
+
+.side{flex-direction:column;gap:6px;background:var(--surface);border-right:1px solid var(--line);padding:14px 12px;min-height:0;overflow:auto}
+.side .brand{padding:4px 0 12px;justify-content:center}
+.nav{display:flex;flex-direction:column;gap:2px}
+.grp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 10px 6px}
+.nav a{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:9px;color:var(--muted);text-decoration:none;font-weight:600;cursor:pointer}
+.nav a:hover{background:var(--surface-2);color:var(--fg)}
+.nav a[aria-current="page"]{background:var(--brand-soft);color:var(--brand)}
+.side-foot{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 6px 2px;border-top:1px solid var(--line)}
+.side-foot .who{min-width:0;flex:1}
+.side-foot .who b{display:block;font-size:13px}
+.side-foot .who span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* rail mode (tablet): icons only */
+.side .nav-label,.side .grp,.side .who,.side .brand-name{display:none}
+.side .nav a{justify-content:center}
+.side .side-foot{flex-direction:column}
+
+@container app (min-width:640px){
+  .app{grid-template-columns:72px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .side{display:flex;grid-column:1;grid-row:1/-1}
+  .bottom,.menu-btn,.brand-m{display:none}
+  .top{padding:12px 24px}
+  .main{padding:24px}
+  .top-search{display:flex}
+  .top-title{display:none}
+  .top .spacer{flex:1}
+}
+@container app (min-width:1024px){
+  .app{grid-template-columns:236px minmax(0,1fr)}
+  .side .nav-label,.side .grp,.side .who,.side .brand-name{display:block}
+  .side .nav a{justify-content:flex-start}
+  .side .brand{justify-content:flex-start;padding:4px 6px 12px}
+  .side .side-foot{flex-direction:row}
+  .main{padding:28px 32px 36px}
+}
+
+/* drawer + modal (inside the app frame) */
+.overlay{position:absolute;inset:0;background:var(--scrim);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.drawer-o{justify-content:flex-start;align-items:stretch}
+.drawer{width:min(290px,84%);background:var(--surface);height:100%;padding:16px 12px;display:flex;flex-direction:column;gap:6px;overflow:auto}
+.drawer .nav-label,.drawer .grp{display:block}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;padding:0 4px 8px}
+.sheet{background:var(--surface);width:100%;max-height:90%;overflow:auto;border-radius:18px 18px 0 0;padding:20px 16px 18px;box-shadow:var(--shadow)}
+.sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+.sheet-head h3{font-size:19px}
+.sheet-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
+@container app (min-width:640px){
+  .overlay:not(.drawer-o){align-items:center;padding:24px}
+  .sheet{max-width:540px;border-radius:14px;padding:24px}
+}
+
+/* primitives */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:9px 14px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;white-space:nowrap;text-decoration:none;color:var(--fg)}
+.btn:hover{background:var(--surface-2)}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:var(--primary-fg)}
+.btn-primary:hover{background:var(--primary);filter:brightness(1.08)}
+.btn-danger{color:var(--err-text)}
+.btn-block{width:100%}
+.btn-sm{padding:6px 10px;font-size:12.5px}
+.link{color:var(--link);font-weight:600;cursor:pointer;background:none;border:0;padding:0;text-decoration:none}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.card-pad{padding:18px}
+.card-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card-h h3{font-size:15.5px}
+.ph{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+.ph h2{font-size:22px}
+.ph p{margin:2px 0 0;color:var(--muted)}
+.ph .acts{display:flex;gap:8px;flex-wrap:wrap}
+@container app (min-width:640px){.ph h2{font-size:26px}}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.ok{background:var(--ok-soft);color:var(--ok-text)}
+.pill.ok::before{background:var(--ok)}
+.pill.err{background:var(--err-soft);color:var(--err-text)}
+.pill.err::before{background:var(--err)}
+.pill.warn{background:var(--warn-soft);color:var(--warn-text)}
+.pill.warn::before{background:var(--warn)}
+.pill.acc{background:var(--accent-soft);color:var(--accent-text)}
+.pill.neu{background:var(--surface-2);color:var(--muted)}
+.pill.plain::before{display:none}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-weight:600;font-size:13px}
+.field .hint{font-size:12px;color:var(--muted)}
+.input,.select,.textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:9px 11px;outline:none}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.input[readonly]{background:var(--surface-2);color:var(--muted)}
+.textarea{min-height:260px;resize:vertical;line-height:1.6}
+.fgrid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:560px){.fgrid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.span2{grid-column:1/-1}}
+.sec-t{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:22px 0 10px}
+.sec-t:first-child{margin-top:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;font-weight:600;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--primary-soft);border-color:transparent;color:var(--primary)}
+.chip svg.i{width:13px;height:13px}
+.tag-input{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:6px 8px;background:var(--surface)}
+.tag-input input{border:0;outline:none;background:none;flex:1;min-width:90px;padding:3px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.search{display:flex;align-items:center;gap:8px;flex:1 1 220px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--muted)}
+.search input{border:0;outline:none;background:none;padding:9px 0;width:100%;color:var(--fg)}
+.toolbar .select{flex:0 1 200px;width:auto}
+.callout{display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:var(--primary-soft);color:var(--fg);font-size:13.5px}
+.callout svg{color:var(--primary);margin-top:2px}
+.callout.err{background:var(--err-soft)}
+.callout.err svg{color:var(--err)}
+.ini{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;font-weight:700;font-size:12px;background:var(--surface-2);color:var(--fg);flex:none}
+.toast{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:40;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+@container app (min-width:640px){.toast{bottom:24px}}
+
+/* tables vs cards */
+.app .only-wide{display:none}
+.top .spacer{flex:1}
+td.num{white-space:nowrap}
+@container app (min-width:900px){.app .only-wide{display:block}.app .only-narrow{display:none}}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:10px 16px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-2)}
+td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+.person{display:flex;align-items:center;gap:10px;min-width:0}
+.person > div b{display:block;font-weight:600}
+.person > div span{display:block;color:var(--muted);font-size:12.5px}
+.ctl{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:600}
+.clist{display:grid;gap:10px}
+.citem{padding:14px;display:flex;flex-direction:column;gap:10px}
+.citem .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.citem .meta{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;flex-wrap:wrap}
+.pager .btns{display:flex;gap:6px}
+
+/* dashboard */
+.stats{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:16px}
+@container app (min-width:900px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stat{padding:16px 18px}
+.stat .k{font-size:12.5px;color:var(--muted);font-weight:600}
+.stat .v{font-family:var(--display);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin-top:4px}
+.stat .d{font-size:12.5px;margin-top:2px;color:var(--muted)}
+.stat .d b{color:var(--ok-text);font-weight:600}
+.stat .d b.e{color:var(--err-text)}
+.dash{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:1100px){.dash{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}}
+.dash>div{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-content:start;min-width:0}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chart{display:grid;grid-template-columns:28px minmax(0,1fr);gap:6px;padding:18px 18px 6px}
+.yax,.plot{position:relative;height:180px}
+.yax span{position:absolute;right:0;transform:translateY(50%);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.gl{position:absolute;left:0;right:0;border-top:1px dashed var(--line)}
+.bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:5px}
+.bar{flex:1;background:var(--ok);border-radius:4px 4px 0 0;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.bar i{display:block;background:var(--err)}
+.xax{display:flex;justify-content:space-between;padding:0 18px 16px 52px;font-size:11px;color:var(--muted)}
+.feed{display:flex;flex-direction:column}
+.feed a{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--line);cursor:pointer;text-decoration:none;color:inherit}
+.feed a:last-child{border-bottom:0}
+.feed a:hover{background:var(--surface-2)}
+.feed .who{flex:1;min-width:0}
+.feed .who b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed .who span{font-size:12px;color:var(--muted)}
+.check{display:flex;flex-direction:column}
+.check a{display:flex;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);cursor:pointer;color:inherit;text-decoration:none}
+.check a:last-child{border-bottom:0}
+.check a:hover{background:var(--surface-2)}
+.tick{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--ok-soft);color:var(--ok-text);flex:none}
+.tick svg{width:14px;height:14px;stroke-width:2.6}
+.check .txt{flex:1;min-width:0}
+.check .txt b{display:block;font-weight:600}
+.check .txt span{font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
+
+/* send */
+.send-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:1180px){.send-grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}.preview{position:sticky;top:0}}
+.send-grid>*{min-width:0}
+.resume-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px dashed var(--line);border-radius:10px;flex-wrap:wrap}
+.resume-row .f{flex:1;min-width:0;overflow-wrap:anywhere}
+.filei{display:inline-grid;place-items:center;width:38px;height:44px;border-radius:7px;background:var(--err-soft);color:var(--err-text);font-size:10px;font-weight:700;flex:none}
+.mailmeta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px}
+.mailmeta dt{color:var(--muted)}
+.mailmeta dd{margin:0;overflow-wrap:anywhere}
+.mailbody{padding:18px;white-space:pre-wrap;line-height:1.7;overflow-wrap:anywhere}
+mark{background:var(--accent-soft);color:var(--accent-text);padding:0 3px;border-radius:4px;font-weight:600}
+.sticky-act{position:sticky;bottom:-28px;margin:16px -16px -28px;padding:12px 16px;background:var(--surface);border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;z-index:2}
+@container app (min-width:640px){.sticky-act{margin:16px -24px -24px;padding:12px 24px;bottom:-24px}}
+@container app (min-width:1024px){.sticky-act{margin:16px -32px -36px;padding:14px 32px;bottom:-36px}}
+
+/* history */
+.hist{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:1024px){.hist{grid-template-columns:minmax(0,1fr) 360px}}
+.hist .detail{display:none}
+@container app (min-width:1024px){.hist .detail{display:block;position:sticky;top:0;align-self:start}}
+.txrow{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);cursor:pointer;flex-wrap:wrap}
+.txrow:last-child{border-bottom:0}
+.txrow:hover{background:var(--surface-2)}
+.txrow[aria-selected="true"]{background:var(--primary-soft)}
+.txrow .who{flex:1 1 180px;min-width:0}
+.txrow .who b{display:block;font-weight:600;overflow-wrap:anywhere}
+.txrow .who span{font-size:12px;color:var(--muted)}
+.kv{display:grid;gap:14px}
+.kv div span{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:3px}
+.kv div p{margin:0;overflow-wrap:anywhere}
+.idrow{display:flex;gap:8px;align-items:center}
+.idrow code{flex:1;min-width:0;overflow-wrap:anywhere;background:var(--surface-2);padding:6px 8px;border-radius:7px}
+.resp{background:var(--surface-2);padding:10px 12px;border-radius:8px;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* templates */
+.tpl{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@container app (min-width:1024px){.tpl{grid-template-columns:300px minmax(0,1fr)}}
+.tpl>*{min-width:0}
+.tlist{display:flex;flex-direction:column;gap:8px}
+.titem{padding:14px;cursor:pointer;text-align:left;width:100%}
+.titem[aria-selected="true"]{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.titem .row{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.titem p{margin:6px 0 0;font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ed-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+.cbx{display:inline-flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.cbx input{width:16px;height:16px;accent-color:var(--primary)}
+
+/* resumes */
+.drop{border:1.5px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;background:var(--surface);display:flex;flex-direction:column;align-items:center;gap:8px}
+.drop .big{display:inline-grid;place-items:center;width:48px;height:48px;border-radius:12px;background:var(--primary-soft);color:var(--primary)}
+.drop .big svg{width:22px;height:22px}
+.drop b{font-size:15px}
+.ver{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ver:last-child{border-bottom:0}
+.ver .f{flex:1 1 200px;min-width:0}
+.ver .f b{display:block;overflow-wrap:anywhere}
+.ver .f span{font-size:12.5px;color:var(--muted)}
+.ver .a{display:flex;gap:8px;align-items:center}
+.import-res{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+@container app (min-width:560px){.import-res{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.import-res div{background:var(--surface-2);border-radius:10px;padding:10px 12px}
+.import-res b{display:block;font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
+.import-res span{font-size:12px;color:var(--muted)}
+.multi{display:flex;gap:8px;align-items:center}
+.multi .input{flex:1}
+.multi label{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* settings tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px;overflow-x:auto}
+.tabs button{border:0;background:none;padding:10px 14px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--primary);border-bottom-color:var(--primary)}
+.narrow{max-width:640px}
+.status-line{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--ok-soft);margin-bottom:18px;flex-wrap:wrap}
+.status-line .t{flex:1;min-width:0}
+.status-line b{display:block}
+.status-line span{font-size:12.5px;color:var(--muted)}
+
+/* admin switch */
+.switch{width:38px;height:22px;border-radius:999px;border:0;background:var(--line);position:relative;cursor:pointer;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch[aria-checked="true"]{background:var(--primary)}
+.switch[aria-checked="true"]::after{transform:translateX(16px)}
+.role-sel{padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:12.5px}
+
+/* auth */
+.auth{height:100%;overflow:auto;display:grid;grid-template-columns:minmax(0,1fr);background:var(--bg)}
+.auth-art{display:none}
+.auth-form{display:flex;flex-direction:column;justify-content:center;padding:28px 16px;min-width:0}
+.auth-box{width:100%;max-width:400px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.auth-box h2{font-size:26px}
+.auth-box .sub{color:var(--muted);margin:-8px 0 4px}
+.auth-mbrand{margin-bottom:8px}
+.divider{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12.5px}
+.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+.row-between{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pw{position:relative}
+.pw .input{padding-right:58px}
+.pw button{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12.5px}
+.otp{display:flex;gap:8px}
+.otp input{width:100%;min-width:0;max-width:52px;aspect-ratio:1/1.1;text-align:center;font-size:20px;font-family:var(--mono);border:1px solid var(--line);border-radius:10px;background:var(--surface);outline:none}
+.otp input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.stepper{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);font-weight:600}
+.stepper i{flex:1;height:4px;border-radius:4px;background:var(--line)}
+.stepper i.on{background:var(--primary)}
+.meter{display:flex;gap:4px;margin-top:2px}
+.meter i{flex:1;height:4px;border-radius:4px;background:var(--line)}
+.gbtn svg{width:18px;height:18px}
+@container app (min-width:900px){
+  .auth{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .auth-art{display:flex;flex-direction:column;justify-content:space-between;gap:28px;padding:40px;background:var(--brand-panel);color:var(--on-brand)}
+  .auth-mbrand{display:none}
+}
+.auth-art h1,.auth-art .brand{color:var(--on-brand)}
+.auth-art{--mark-bg:var(--on-brand);--mark-fg:var(--brand-panel)}
+.auth-art .brand-name b{color:var(--on-brand-accent)}
+.auth-art h1{font-size:34px;line-height:1.15;max-width:15ch;margin-top:40px}
+.auth-art p{color:var(--on-brand-muted);max-width:42ch;margin:12px 0 0}
+.flow{display:flex;flex-direction:column;gap:10px;max-width:400px}
+.flow > div{display:flex;gap:12px;align-items:flex-start;background:var(--on-brand-card);border:1px solid var(--on-brand-line);border-radius:12px;padding:12px 14px}
+.flow em{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--on-brand-accent);font-weight:500;margin-top:2px}
+.flow b{display:block}
+.flow span{font-size:12.5px;color:var(--on-brand-muted)}
+
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="proto">
+  <div class="proto-l"><h1>ColdReach · UI designs</h1><small>Clickable prototype with sample data. Switch device size to check each layout.</small></div>
+  <div class="proto-r">
+    <div class="seg" role="group" aria-label="Device size">
+      <button data-act="size:desktop" aria-pressed="true">Desktop</button>
+      <button data-act="size:tablet" aria-pressed="false">Tablet</button>
+      <button data-act="size:mobile" aria-pressed="false">Mobile</button>
+    </div>
+    <select id="jump" aria-label="Jump to screen"></select>
+    <button class="icon-btn" data-act="theme" aria-label="Toggle light or dark theme" id="protoTheme"></button>
+  </div>
+</div>
+<div class="stage"><div class="device" id="device" data-size="desktop"><div id="root" style="height:100%"></div></div></div>
+
+<script>
+const P = {
+  home:'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+  users:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  send:'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+  clock:'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+  file:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5',
+  resume:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M12 11.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8.5 19c.7-1.4 2-2.2 3.5-2.2s2.8.8 3.5 2.2',
+  sliders:'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
+  shield:'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  upload:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
+  plus:'M12 5v14M5 12h14',
+  search:'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+  menu:'M3 6h18M3 12h18M3 18h18',
+  x:'M18 6L6 18M6 6l12 12',
+  check:'M20 6L9 17l-5-5',
+  mail:'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
+  sun:'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  moon:'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
+  copy:'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  logout:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  more:'M5 12h.01M12 12h.01M19 12h.01',
+  info:'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01',
+  alert:'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  eye:'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  chev:'M15 18l-6-6 6-6',
+  chevr:'M9 18l6-6-6-6',
+  refresh:'M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15',
+  trash:'M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6',
+};
+const ic = (n, extra='') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${n==='more'?' style="stroke-width:3"':''}${extra}><path d="${P[n]}"/></svg>`;
+const G = `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.09A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.43.34-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.96 10.96 0 0 0 12 1 11 11 0 0 0 2.18 7.07l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>`;
+
+/* ---------- sample data (example records, not real sends) ---------- */
+const CONTACTS = [
+  ['Priya Sharma','Talent Acquisition Lead','Zoho','priya.sharma@zohocorp.com',1,'98450 12345','02 Oct 2026'],
+  ['Rahul Mehta','HR Manager','Freshworks','rahul.m@freshworks.com',0,'99001 23456','01 Oct 2026'],
+  ['Ananya Iyer','Technical Recruiter','Razorpay','ananya.iyer@razorpay.com',2,'','29 Sep 2026'],
+  ['Vikram Singh','Senior HR Business Partner','Swiggy','vikram.singh@swiggy.in',0,'98200 55443','27 Sep 2026'],
+  ['Neha Kulkarni','Recruitment Specialist','Persistent Systems','neha_kulkarni@persistent.com',0,'97654 32109','25 Sep 2026'],
+  ['Arjun Nair','Head of Talent','CRED','arjun@cred.club',1,'','22 Sep 2026'],
+  ['Sneha Patil','HR Executive','Infosys','sneha.patil@infosys.com',0,'98901 11223','20 Sep 2026'],
+  ['Karthik Reddy','Campus & Lateral Hiring','PhonePe','karthik.r@phonepe.com',0,'99860 77881','18 Sep 2026'],
+];
+const TX = [
+  ['b7e15c90-6a2d-4f81-9c3e-08d5a1f7e462','kavya.menon@zohocorp.com','Kavya Menon · Zoho','PENDING','','Queued. Part of the bulk send you started at 11:40. It goes out in the next batch.','10 Oct 2026, 11:43'],
+  ['7f3c9a2e-41d8-4b6a-9e15-2c8d0a6f1b34','priya.sharma@zohocorp.com','Priya Sharma · Zoho','SUCCESS','','250 2.0.0 OK — message accepted for delivery','10 Oct 2026, 11:42'],
+  ['c1a84e07-9b3f-4d52-a7e1-6f02b8c94d10','rahul.m@freshworks.com','Rahul Mehta · Freshworks','SUCCESS','','250 2.0.0 OK — message accepted for delivery','10 Oct 2026, 11:41'],
+  ['5e92b1d4-0c7a-48f3-b6d9-81e4a2f07c55','ananya.iyer@razorpay.com','Ananya Iyer · Razorpay','FAILED','RECIPIENT_NOT_FOUND','550 5.1.1 The email account that you tried to reach does not exist.','10 Oct 2026, 11:41'],
+  ['a0d47f19-3e6b-4c28-9f5a-7b12e8d36c01','vikram.singh@swiggy.in','Vikram Singh · Swiggy','SUCCESS','','250 2.0.0 OK — message accepted for delivery','09 Oct 2026, 18:05'],
+  ['e8b2c615-7d94-4a0f-83c1-5f6a9e20b4d7','neha_kulkarni@persistent.com','Neha Kulkarni · Persistent Systems','FAILED','CREDENTIALS_EXPIRED','535 5.7.8 Username and Password not accepted. Update your Gmail app password in Settings → Email sending.','09 Oct 2026, 18:04'],
+  ['3b6f0d82-c5e1-47a9-b2d8-0e94f71a6c23','arjun@cred.club','Arjun Nair · CRED','SUCCESS','','250 2.0.0 OK — message accepted for delivery','08 Oct 2026, 10:17'],
+  ['91c7e4a3-2f08-4b5d-a6e9-d3b0c18f2e74','sneha.patil@infosys.com','Sneha Patil · Infosys','SUCCESS','','250 2.0.0 OK — message accepted for delivery','08 Oct 2026, 10:16'],
+  ['d4a09e56-8b1c-4f73-9e2a-61c5b7f08d39','karthik.r@phonepe.com','Karthik Reddy · PhonePe','FAILED','CONNECTION_FAILED','Timed out connecting to smtp.gmail.com:587 after 30s.','07 Oct 2026, 21:30'],
+];
+const DAYS = [[12,0],[18,1],[9,0],[22,2],[25,1],[14,0],[6,0],[19,1],[28,3],[31,2],[17,0],[24,1],[20,1],[13,1]]; // [total, failed], 27 Sep → 10 Oct
+const TEMPLATES = [
+  {name:'Backend Developer', def:true, subject:'Application for {{ job_position }} role at {{ company_name }}',
+   content:`Hi {{ hr_name }},
+
+I hope you're doing well. I'm {{ applicant_name }}, a backend developer with {{ experience_years }} years of experience building APIs with Python, FastAPI and PostgreSQL.
+
+I'd love to be considered for the {{ job_position }} role at {{ company_name }}. My resume is attached for your reference.
+
+LinkedIn: {{ linkedin_url }}
+Phone: {{ contact_number }}
+
+Thanks for your time,
+{{ applicant_name }}`},
+  {name:'Referral follow-up', def:false, subject:'Following up on my application — {{ applicant_name }}',
+   content:`Hi {{ hr_name }},
+
+I applied for the {{ job_position }} role at {{ company_name }} last week and wanted to follow up. I'm still very interested and happy to share anything else you need.
+
+Best regards,
+{{ applicant_name }}`},
+  {name:'Short intro', def:false, subject:'{{ job_position }} — quick intro',
+   content:`Hi {{ hr_name }}, I'm {{ applicant_name }} ({{ experience_years }} yrs, backend). Resume attached. Open to roles at {{ company_name }}. {{ linkedin_url }}`},
+];
+const USERS = [
+  ['Saurabh A.','saurabh.dev@example.com','admin','local',true,true,'02 Aug 2026'],
+  ['Meera Joshi','meera.joshi@example.com','user','google',true,true,'14 Sep 2026'],
+  ['Rohan Desai','rohan.desai@example.com','user','local',true,true,'21 Sep 2026'],
+  ['Aditi Rao','aditi.rao@example.com','user','local',false,false,'09 Oct 2026'],
+  ['Faisal Khan','faisal.k@example.com','user','google',false,true,'30 Sep 2026'],
+];
+const ME = {name:'Saurabh A.', email:'saurabh.dev@example.com', ini:'SA'};
+const VARS = {hr_name:'Priya Sharma', company_name:'Zoho', job_position:'Backend Developer', applicant_name:'Saurabh A.', experience_years:'3', linkedin_url:'linkedin.com/in/saurabh-dev', contact_number:'98765 43210', email:ME.email};
+
+const SCREENS = [
+  ['login','Sign in','auth'],['signup','Create account','auth'],['forgot','Reset password','auth'],
+  ['dashboard','Dashboard'],['contacts','HR Contacts'],['send','Send Email'],['history','History'],
+  ['templates','Templates'],['resumes','Resumes'],['settings','Settings'],['users','Users (admin)'],
+];
+const NAV = [
+  ['Workspace',[['dashboard','Dashboard','home'],['contacts','HR Contacts','users'],['send','Send Email','send'],['history','History','clock']]],
+  ['Setup',[['templates','Templates','file'],['resumes','Resumes','resume'],['settings','Settings','sliders']]],
+  ['Admin',[['users','Users','shield']]],
+];
+
+const S = {screen:'dashboard', step:1, fstep:1, hist:'all', tx:1, tpl:0, set:'smtp', mode:'single', modal:null, drawer:false, imported:false, users:USERS.map(u=>({role:u[2],on:u[5]}))};
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ini = n => n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const pill = st => st==='SUCCESS' ? '<span class="pill ok">Sent</span>' : st==='PENDING' ? '<span class="pill warn">Pending</span>' : '<span class="pill err">Failed</span>';
+const fill = (t, hl=true) => esc(t).replace(/\{\{\s*(\w+)\s*\}\}/g, (_,k) => hl ? `<mark>${esc(VARS[k]??k)}</mark>` : esc(VARS[k]??k));
+const isWide = () => document.getElementById('device').clientWidth >= 1024;
+
+/* ---------- shell ---------- */
+function navHTML(){
+  return NAV.map(([g,items]) => `<div class="grp">${g}</div>` + items.map(([id,label,icon]) =>
+    `<a data-go="${id}" title="${label}" ${S.screen===id?'aria-current="page"':''}>${ic(icon)}<span class="nav-label">${label}</span></a>`).join('')).join('');
+}
+const LOGO = `<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect class="lg-bg" width="32" height="32" rx="8"/><rect class="lg-env" x="6" y="10.5" width="17" height="13" rx="2.2"/><path class="lg-cut" d="M7.2 11.8l7.3 5.4 7.3-5.4"/><circle class="lg-dot" cx="23.6" cy="10" r="5.3"/><path class="lg-arrow" d="M21.7 11.9l3.7-3.7M22.6 8.2h2.8V11"/></svg>`;
+const brand = (cls='') => `<div class="brand ${cls}">${LOGO}<span class="brand-name">Cold<b>Reach</b></span></div>`;
+function themeIcon(){ return ic(effectiveTheme()==='dark' ? 'sun' : 'moon'); }
+function effectiveTheme(){ const t=document.documentElement.dataset.theme; return t || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); }
+
+function shell(){
+  const title = (SCREENS.find(s=>s[0]===S.screen)||[])[1];
+  const bn = [['dashboard','Home','home'],['contacts','Contacts','users'],['send','Send','send'],['history','History','clock']];
+  return `<div class="app">
+    <aside class="side">${brand()}<nav class="nav">${navHTML()}</nav>
+      <div class="side-foot"><span class="avatar">${ME.ini}</span><div class="who"><b>${ME.name}</b><span>${ME.email}</span></div>
+      <button class="icon-btn" data-go="login" title="Sign out" aria-label="Sign out">${ic('logout')}</button></div></aside>
+    <header class="top">
+      <button class="icon-btn menu-btn" data-act="menu" aria-label="Open menu">${ic('menu')}</button>
+      ${brand('brand-m')}
+      <label class="top-search">${ic('search')}<input id="gsearch" placeholder="Search contacts, companies, emails"></label>
+      <span class="spacer"></span>
+      <button class="icon-btn" data-act="theme" aria-label="Toggle theme">${themeIcon()}</button>
+      <span class="avatar" title="${ME.name}">${ME.ini}</span>
+    </header>
+    <main class="main" id="main">${VIEWS[S.screen]()}</main>
+    <nav class="bottom">${bn.map(([id,l,i])=>`<button data-go="${id}" ${S.screen===id?'aria-current="page"':''}>${ic(i)}${l}</button>`).join('')}
+      <button data-act="menu" ${['templates','resumes','settings','users'].includes(S.screen)?'aria-current="page"':''}>${ic('more')}More</button></nav>
+    ${S.drawer ? `<div class="overlay drawer-o" data-act="close"><div class="drawer" data-stop>
+        <div class="drawer-head">${brand()}<button class="icon-btn" data-act="close" aria-label="Close menu">${ic('x')}</button></div>
+        <nav class="nav">${navHTML()}</nav>
+        <div class="side-foot"><span class="avatar">${ME.ini}</span><div class="who" style="display:block"><b>${ME.name}</b><span>${ME.email}</span></div>
+        <button class="icon-btn" data-go="login" aria-label="Sign out">${ic('logout')}</button></div></div></div>` : ''}
+    ${S.modal ? `<div class="overlay" data-act="close"><div class="sheet" data-stop role="dialog" aria-modal="true">${MODALS[S.modal]()}</div></div>` : ''}
+    <div class="toast" id="toast" hidden></div>
+  </div>`;
+}
+const head = (h,p,acts='') => `<div class="ph"><div><h2>${h}</h2><p>${p}</p></div>${acts?`<div class="acts">${acts}</div>`:''}</div>`;
+
+/* ---------- views ---------- */
+const VIEWS = {
+dashboard(){
+  const tot = DAYS.reduce((a,d)=>a+d[0],0), fail = DAYS.reduce((a,d)=>a+d[1],0);
+  const max = 35, grid=[30,20,10,0];
+  const lab = ['27 Sep','28 Sep','29 Sep','30 Sep','1 Oct','2 Oct','3 Oct','4 Oct','5 Oct','6 Oct','7 Oct','8 Oct','9 Oct','10 Oct'];
+  return head('Good morning, Saurabh','Your outreach over the last 14 days.',
+    `<button class="btn" data-go="contacts">${ic('upload')}Import contacts</button><button class="btn btn-primary" data-go="send">${ic('send')}Send email</button>`) + `
+  <div class="stats">
+    <div class="card stat"><div class="k">Emails sent</div><div class="v">${tot}</div><div class="d">last 14 days</div></div>
+    <div class="card stat"><div class="k">Sent successfully</div><div class="v">${tot-fail}</div><div class="d"><b>${((tot-fail)/tot*100).toFixed(1)}%</b> success rate</div></div>
+    <div class="card stat"><div class="k">Failed</div><div class="v">${fail}</div><div class="d"><b class="e">2 need action</b> · <a class="link" data-go="history">review</a></div></div>
+    <div class="card stat"><div class="k">HR contacts</div><div class="v">1,186</div><div class="d"><b>+42</b> this week</div></div>
+  </div>
+  <div class="dash">
+    <div>
+      <div class="card">
+        <div class="card-h"><h3>Emails per day</h3><div class="legend"><span><i style="background:var(--ok)"></i>Sent</span><span><i style="background:var(--err)"></i>Failed</span></div></div>
+        <div class="chart">
+          <div class="yax">${grid.map(v=>`<span style="bottom:${v/max*100}%">${v}</span>`).join('')}</div>
+          <div class="plot">${grid.map(v=>`<div class="gl" style="bottom:${v/max*100}%"></div>`).join('')}
+            <div class="bars">${DAYS.map((d,i)=>`<div class="bar" style="height:${d[0]/max*100}%" title="${lab[i]}: ${d[0]-d[1]} sent, ${d[1]} failed"><i style="height:${d[1]/d[0]*100}%"></i></div>`).join('')}</div></div>
+        </div>
+        <div class="xax"><span>27 Sep</span><span>3 Oct</span><span>10 Oct</span></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Recent sends</h3><a class="link" data-go="history">View all</a></div>
+        <div class="feed">${TX.slice(0,5).map((t,i)=>`<a data-act="opentx:${i}"><span class="ini">${ini(t[2])}</span><div class="who"><b>${t[2]}</b><span>${t[6]}</span></div>${pill(t[3])}</a>`).join('')}</div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-h"><h3>Ready to send</h3><span class="pill ok">3 of 3</span></div>
+        <div class="check">
+          <a data-go="settings"><span class="tick">${ic('check')}</span><div class="txt"><b>Email account connected</b><span>${ME.email} via smtp.gmail.com</span></div>${ic('chevr')}</a>
+          <a data-go="templates"><span class="tick">${ic('check')}</span><div class="txt"><b>Default template set</b><span>Backend Developer</span></div>${ic('chevr')}</a>
+          <a data-go="resumes"><span class="tick">${ic('check')}</span><div class="txt"><b>Active resume</b><span>Version 3 · uploaded 08 Oct 2026</span></div>${ic('chevr')}</a>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <div class="callout err">${ic('alert')}<div><b>Gmail rejected your app password on 09 Oct.</b><br>One email failed with CREDENTIALS_EXPIRED. Update the password, then retry from History.<br><a class="link" data-go="settings">Update password</a></div></div>
+      </div>
+    </div>
+  </div>`;
+},
+contacts(){
+  const tbl = `<div class="card only-wide"><div class="tbl-wrap"><table>
+    <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Phone</th><th>Added</th><th></th></tr></thead>
+    <tbody>${CONTACTS.map(c=>`<tr><td><div class="person"><span class="ini">${ini(c[0])}</span><div><b>${c[0]}</b><span>${c[1]}</span></div></div></td>
+      <td>${c[2]}</td><td style="white-space:nowrap"><span class="mono">${c[3]}</span>${c[4]?` <span class="pill neu plain">+${c[4]}</span>`:''}</td>
+      <td class="num">${c[5]||'<span class="muted">—</span>'}</td><td class="num muted">${c[6]}</td>
+      <td><button class="btn btn-sm" data-go="send">${ic('send')}Email</button></td></tr>`).join('')}</tbody></table></div>
+    <div class="pager"><span class="num">Showing 1–8 of 1,186</span><div class="btns"><button class="btn btn-sm" aria-label="Previous page">${ic('chev')}</button><button class="btn btn-sm" aria-label="Next page">${ic('chevr')}</button></div></div></div>`;
+  const cards = `<div class="clist only-narrow">${CONTACTS.map(c=>`<div class="card citem">
+      <div class="row"><div class="person"><span class="ini">${ini(c[0])}</span><div><b>${c[0]}</b><span>${c[1]} · ${c[2]}</span></div></div></div>
+      <div class="meta"><span class="mono">${c[3]}${c[4]?` <span class="pill neu plain">+${c[4]}</span>`:''}</span>${c[5]?`<span class="num">${c[5]}</span>`:''}</div>
+      <div class="row"><span class="muted num" style="font-size:12px">Added ${c[6]}</span><button class="btn btn-sm" data-go="send">${ic('send')}Email</button></div></div>`).join('')}
+      <button class="btn">Load more</button></div>`;
+  return head('HR Contacts','1,186 recruiters across 412 companies.',
+    `<button class="btn" data-act="modal:import">${ic('upload')}Import</button><button class="btn btn-primary" data-act="modal:add">${ic('plus')}Add contact</button>`) + `
+  <div class="toolbar"><label class="search">${ic('search')}<input id="csearch" placeholder="Search by name, email or company"></label>
+    <select class="select" id="ccompany" aria-label="Filter by company"><option>All companies</option><option>Zoho</option><option>Razorpay</option><option>Swiggy</option></select></div>
+  ${tbl}${cards}`;
+},
+send(){
+  const t = TEMPLATES[0], single = S.mode==='single';
+  return head('Send Email','Emails go out from your own Gmail with your active resume attached.') + `
+  <div class="seg" role="group" aria-label="Who to send to" style="margin-bottom:16px">
+    <button data-act="mode:single" aria-pressed="${single}">One recruiter</button>
+    <button data-act="mode:all" aria-pressed="${!single}">All contacts</button></div>
+  <div class="send-grid">
+    <div class="card card-pad">
+      <div class="sec-t">Recipient</div>
+      ${single ? `<div class="fgrid two">
+        <div class="field span2"><label for="pick">Pick from contacts</label><select class="select" id="pick">${CONTACTS.map(c=>`<option>${c[0]} — ${c[2]}</option>`).join('')}</select><span class="hint">Or fill the fields below by hand.</span></div>
+        <div class="field"><label for="hr_name">HR name</label><input class="input" id="hr_name" value="Priya Sharma"></div>
+        <div class="field"><label for="hr_email">HR email</label><input class="input" id="hr_email" type="email" value="priya.sharma@zohocorp.com"></div>
+        <div class="field"><label for="company_name">Company</label><input class="input" id="company_name" value="Zoho"></div>
+        <div class="field"><label for="title">HR title <span class="muted">(optional)</span></label><input class="input" id="title" value="Talent Acquisition Lead"></div>
+      </div>` : `<div class="callout">${ic('info')}<div><b>Sends one email to each of your 1,186 contacts.</b><br>Each email is personalised with that contact's name and company. Failed sends show up in History.</div></div>`}
+      <div class="sec-t">About you</div>
+      <div class="fgrid two">
+        <div class="field"><label for="applicant_name">Your name</label><input class="input" id="applicant_name" value="${VARS.applicant_name}"></div>
+        <div class="field"><label for="a_email">Your email</label><input class="input" id="a_email" type="email" value="${ME.email}"></div>
+        <div class="field"><label for="contact_number">Phone</label><input class="input" id="contact_number" value="${VARS.contact_number}"></div>
+        <div class="field"><label for="experience_years">Experience (years)</label><input class="input" id="experience_years" type="number" min="0" step="0.5" value="3"></div>
+        <div class="field span2"><label for="job_position">Role you're applying for</label><input class="input" id="job_position" value="${VARS.job_position}"></div>
+        <div class="field span2"><label for="linkedin_url">LinkedIn URL</label><input class="input" id="linkedin_url" value="https://${VARS.linkedin_url}"></div>
+        <div class="field span2"><label for="skill_in">Skills</label><div class="tag-input">${['Python','FastAPI','PostgreSQL','Docker','AWS'].map(s=>`<span class="chip">${s}${ic('x')}</span>`).join('')}<input id="skill_in" placeholder="Add skill, press Enter"></div></div>
+      </div>
+      <div class="sec-t">Template & resume</div>
+      <div class="fgrid">
+        <div class="field"><label for="tplsel">Template</label><select class="select" id="tplsel">${TEMPLATES.map(x=>`<option>${x.name}${x.def?' (default)':''}</option>`).join('')}</select></div>
+        <div class="resume-row"><span class="filei">PDF</span><div class="f"><b>Saurabh_A_Backend_v3.pdf</b><br><span class="muted" style="font-size:12.5px">Version 3 · active</span></div><a class="link" data-go="resumes">Change</a></div>
+      </div>
+    </div>
+    <div class="card preview">
+      <div class="card-h"><h3>Preview</h3><span class="pill acc plain">Highlighted text is filled in per recipient</span></div>
+      <dl class="mailmeta">
+        <dt>From</dt><dd>${ME.name} &lt;${ME.email}&gt;</dd>
+        <dt>To</dt><dd>${single?'Priya Sharma &lt;priya.sharma@zohocorp.com&gt;':'1,186 contacts, one email each'}</dd>
+        <dt>Subject</dt><dd><b>${fill(t.subject)}</b></dd>
+        <dt>Attached</dt><dd>Saurabh_A_Backend_v3.pdf</dd>
+      </dl>
+      <div class="mailbody">${fill(t.content)}</div>
+    </div>
+  </div>
+  <div class="sticky-act"><span class="muted">${single?'1 recipient':'1,186 recipients'} · from ${ME.email}</span>
+    <button class="btn btn-primary" data-act="send">${ic('send')}${single?'Send to Priya Sharma':'Send to 1,186 contacts'}</button></div>`;
+},
+history(){
+  const rows = TX.map((t,i)=>[t,i]).filter(([t])=>S.hist==='all'||(S.hist==='ok'?t[3]==='SUCCESS':S.hist==='pend'?t[3]==='PENDING':t[3]==='FAILED'));
+  return head('History','Every send attempt and the mail server\'s reply.',`<button class="btn">${ic('refresh')}Refresh</button>`) + `
+  <div class="toolbar"><div class="chips">
+    <button class="chip" data-act="hist:all" aria-pressed="${S.hist==='all'}">All · 259</button>
+    <button class="chip" data-act="hist:ok" aria-pressed="${S.hist==='ok'}">Sent · 245</button>
+    <button class="chip" data-act="hist:pend" aria-pressed="${S.hist==='pend'}">Pending · 1</button>
+    <button class="chip" data-act="hist:fail" aria-pressed="${S.hist==='fail'}">Failed · 13</button></div>
+    <label class="search">${ic('search')}<input id="hsearch" placeholder="Search recipient or request ID"></label></div>
+  <div class="hist">
+    <div class="card">${rows.map(([t,i])=>`<div class="txrow" data-act="tx:${i}" aria-selected="${i===S.tx}" tabindex="0">
+      <span class="ini">${ini(t[2])}</span><div class="who"><b>${t[2]}</b><span class="mono">${t[1]}</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">${pill(t[3])}<span class="muted num" style="font-size:12px">${t[6]}</span></div></div>`).join('')}
+      <div class="pager"><span class="num">Showing ${rows.length} of ${S.hist==='all'?259:S.hist==='ok'?245:S.hist==='pend'?1:13}</span><div class="btns"><button class="btn btn-sm" aria-label="Previous page">${ic('chev')}</button><button class="btn btn-sm" aria-label="Next page">${ic('chevr')}</button></div></div></div>
+    <div class="card card-pad detail">${txDetail(TX[S.tx])}</div>
+  </div>`;
+},
+templates(){
+  const t = TEMPLATES[S.tpl];
+  const vars = ['hr_name','company_name','job_position','applicant_name','experience_years','linkedin_url','contact_number'];
+  return head('Templates','Write once. Variables are filled in for each recruiter.',`<button class="btn btn-primary">${ic('plus')}New template</button>`) + `
+  <div class="tpl">
+    <div class="tlist">${TEMPLATES.map((x,i)=>`<button class="card titem" data-act="tpl:${i}" aria-selected="${i===S.tpl}">
+      <div class="row"><b>${x.name}</b>${x.def?'<span class="pill ok">Default</span>':''}</div><p>${esc(x.subject)}</p></button>`).join('')}</div>
+    <div class="card card-pad">
+      <div class="fgrid two">
+        <div class="field"><label for="tname">Name</label><input class="input" id="tname" value="${esc(t.name)}"></div>
+        <div class="field"><label for="tsubj">Subject</label><input class="input" id="tsubj" value="${esc(t.subject)}"></div>
+        <div class="field span2"><label>Insert variable</label><div class="chips">${vars.map(v=>`<button class="chip mono" style="font-size:12px">{{ ${v} }}</button>`).join('')}</div></div>
+        <div class="field span2"><label for="tbody">Email body</label><textarea class="textarea" id="tbody">${esc(t.content)}</textarea></div>
+      </div>
+      <div class="ed-foot"><label class="cbx"><input type="checkbox" id="tdef" ${t.def?'checked':''}>Use as default template</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted num" style="font-size:12.5px">${t.content.length.toLocaleString('en-IN')} / 10,000</span>
+        <button class="btn" data-go="send">${ic('eye')}Preview</button><button class="btn btn-primary" data-act="toast:Template saved">Save</button></div></div>
+    </div>
+  </div>`;
+},
+resumes(){
+  const V = [[3,'Saurabh_A_Backend_v3.pdf','08 Oct 2026',true],[2,'Saurabh_A_Backend_v2.pdf','14 Sep 2026',false],[1,'Saurabh_A_Resume.pdf','02 Aug 2026',false]];
+  return head('Resumes','The active version is attached to every email you send.') + `
+  <div class="drop" style="margin-bottom:16px"><span class="big">${ic('upload')}</span><b>Drop a PDF here</b><span class="muted">or <button class="link">browse files</button> · PDF only, up to 5 MB</span></div>
+  <div class="card"><div class="card-h"><h3>Versions</h3><span class="muted">3 uploaded</span></div>
+  ${V.map(v=>`<div class="ver"><span class="filei">PDF</span><div class="f"><b>${v[1]}</b><span>Version ${v[0]} · uploaded ${v[2]}</span></div>
+    <div class="a">${v[3]?'<span class="pill ok">Active</span>':`<button class="btn btn-sm" data-act="toast:Version ${v[0]} is now active">Set active</button>`}<button class="btn btn-sm" aria-label="View">${ic('eye')}</button></div></div>`).join('')}</div>`;
+},
+settings(){
+  const tabs = [['profile','Profile'],['smtp','Email sending'],['password','Password']];
+  let body = '';
+  if (S.set==='profile') body = `<div class="card card-pad narrow"><div class="fgrid">
+    <div class="field"><label for="pname">Full name</label><input class="input" id="pname" value="${ME.name}"></div>
+    <div class="field"><label for="pemail">Email</label><input class="input" id="pemail" value="${ME.email}" readonly><span class="hint">Verified at signup. Contact an admin to change it.</span></div>
+    <div class="field"><label for="pmobile">Mobile</label><input class="input" id="pmobile" value="98765 43210"></div>
+    </div><div class="sheet-foot"><button class="btn btn-primary" data-act="toast:Profile saved">Save changes</button></div></div>`;
+  if (S.set==='smtp') body = `<div class="narrow">
+    <div class="status-line"><span class="tick">${ic('check')}</span><div class="t"><b>Connected</b><span>Last test email sent 10 Oct 2026, 11:40</span></div><button class="btn btn-sm" data-act="toast:Test email sent to ${ME.email}">Send test email</button></div>
+    <div class="card card-pad"><div class="fgrid two">
+      <div class="field"><label for="smtp_server">SMTP server</label><input class="input" id="smtp_server" value="smtp.gmail.com"></div>
+      <div class="field"><label for="smtp_port">Port</label><input class="input num" id="smtp_port" value="587"></div>
+      <div class="field span2"><label for="smtp_email">Sending email</label><input class="input" id="smtp_email" value="${ME.email}"></div>
+      <div class="field span2"><label for="smtp_pw">Gmail app password</label><div class="pw"><input class="input mono" id="smtp_pw" type="password" value="abcdefghijklmnop"><button class="link" data-act="peek:smtp_pw">Show</button></div>
+        <span class="hint">Use a 16-character app password, not your normal Gmail password. Create one under Google Account → Security → App passwords. It is stored encrypted.</span></div>
+    </div><div class="sheet-foot"><button class="btn btn-danger">Disconnect</button><button class="btn btn-primary" data-act="toast:Email settings saved">Save</button></div></div></div>`;
+  if (S.set==='password') body = `<div class="card card-pad narrow"><p style="margin-top:0">We'll email a 6-digit code to <b>${ME.email}</b>. Enter it with your new password to finish.</p>
+    <button class="btn btn-primary" data-go="forgot">Send reset code</button></div>`;
+  return head('Settings','Your profile and the email account ColdReach sends from.') +
+    `<div class="tabs" role="tablist">${tabs.map(([id,l])=>`<button role="tab" data-act="set:${id}" aria-selected="${S.set===id}">${l}</button>`).join('')}</div>${body}`;
+},
+users(){
+  const roleSel = (u,i) => `<select class="role-sel" aria-label="Role" data-role="${i}"><option ${S.users[i].role==='user'?'selected':''}>user</option><option ${S.users[i].role==='admin'?'selected':''}>admin</option></select>`;
+  const status = (u,i) => !u[4] ? '<span class="pill warn">Email not verified</span>' : `<button class="switch" role="switch" aria-checked="${S.users[i].on}" data-act="usw:${i}" aria-label="Active"></button>`;
+  const prov = u => u[3]==='google' ? '<span class="pill neu plain">Google</span>' : '<span class="pill neu plain">Email</span>';
+  return head('Users','Manage roles and who can sign in. Visible to admins only.') + `
+  <div class="toolbar"><label class="search">${ic('search')}<input id="usearch" placeholder="Search name or email"></label></div>
+  <div class="card only-wide"><div class="tbl-wrap"><table><thead><tr><th>User</th><th>Sign-in</th><th>Role</th><th>Active</th><th>Joined</th></tr></thead>
+  <tbody>${USERS.map((u,i)=>`<tr><td><div class="person"><span class="ini">${ini(u[0])}</span><div><b>${u[0]}</b><span>${u[1]}</span></div></div></td>
+    <td>${prov(u)}</td><td>${roleSel(u,i)}</td><td>${status(u,i)}</td><td class="num muted">${u[6]}</td></tr>`).join('')}</tbody></table></div></div>
+  <div class="clist only-narrow">${USERS.map((u,i)=>`<div class="card citem"><div class="row"><div class="person"><span class="ini">${ini(u[0])}</span><div><b>${u[0]}</b><span>${u[1]}</span></div></div></div>
+    <div class="row"><label class="ctl">Role ${roleSel(u,i)}</label>${prov(u)}</div>
+    <div class="row" style="border-top:1px solid var(--line);padding-top:10px"><span class="ctl">${u[4]?"Can sign in":"Waiting for email verification"}</span>${status(u,i)}</div></div>`).join('')}</div>`;
+},
+};
+
+function txDetail(t){
+  const fixes = {CREDENTIALS_EXPIRED:['Update your Gmail app password','settings'], RECIPIENT_NOT_FOUND:['Check this contact\'s email address','contacts'], CONNECTION_FAILED:['Retry now. Gmail was unreachable.','history']};
+  const f = fixes[t[4]];
+  return `<div class="kv">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="font-size:16px">${t[2]}</h3>${pill(t[3])}</div>
+    <div><span>Recipient</span><p class="mono">${t[1]}</p></div>
+    <div><span>Request ID</span><div class="idrow"><code class="mono">${t[0]}</code><button class="icon-btn" data-act="copy:${t[0]}" aria-label="Copy request ID">${ic('copy')}</button></div></div>
+    <div><span>Sent at</span><p class="num">${t[6]}</p></div>
+    ${t[4]?`<div><span>Error code</span><p><span class="pill err plain mono">${t[4]}</span></p></div>`:''}
+    <div><span>Server response</span><div class="resp">${esc(t[5])}</div></div>
+    ${f?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" data-go="${f[1]}">${f[0]}</button><button class="btn">${ic('refresh')}Retry</button></div>`:''}
+  </div>`;
+}
+
+const MODALS = {
+add(){ return `<div class="sheet-head"><div><h3>Add HR contact</h3><p class="muted" style="margin:2px 0 0">A contact can have several emails and phone numbers.</p></div><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></div>
+  <div class="fgrid two">
+    <div class="field span2"><label for="n_name">Full name</label><input class="input" id="n_name" placeholder="e.g. Kavya Menon"></div>
+    <div class="field"><label for="n_title">Title</label><input class="input" id="n_title" placeholder="Talent Acquisition Lead"></div>
+    <div class="field"><label for="n_company">Company</label><input class="input" id="n_company" placeholder="Zoho"></div>
+    <div class="field span2"><label>Emails</label>
+      <div class="multi"><input class="input" id="n_e1" placeholder="name@company.com" aria-label="Email 1"><label><input type="radio" name="pe" checked>Primary</label></div>
+      <div class="multi"><input class="input" id="n_e2" placeholder="Another email (optional)" aria-label="Email 2"><label><input type="radio" name="pe">Primary</label></div>
+      <button class="link" style="align-self:flex-start">+ Add another email</button></div>
+    <div class="field span2"><label for="n_p1">Phone <span class="muted">(optional)</span></label><input class="input" id="n_p1" placeholder="98450 12345"><button class="link" style="align-self:flex-start">+ Add another phone</button></div>
+  </div>
+  <div class="sheet-foot"><button class="btn" data-act="close">Cancel</button><button class="btn btn-primary" data-act="toast:Contact added">Add contact</button></div>`; },
+import(){ return `<div class="sheet-head"><div><h3>Import contacts</h3><p class="muted" style="margin:2px 0 0">Upload an Excel sheet or a PDF list of recruiters.</p></div><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></div>
+  <div class="drop" data-act="imported" style="cursor:pointer"><span class="big">${ic('upload')}</span><b>Drop a file here</b><span class="muted">.xlsx or .pdf · columns: name, email, title, company, phone</span></div>
+  ${S.imported?`<div class="callout" style="margin-top:14px">${ic('check')}<div><b>hr_list_october.xlsx processed</b></div></div>
+  <div class="import-res"><div><b>312</b><span>rows read</span></div><div><b>287</b><span>added</span></div><div><b>19</b><span>already saved</span></div><div><b>6</b><span>invalid email</span></div></div>`:''}
+  <div class="sheet-foot"><button class="btn" data-act="close">${S.imported?'Done':'Cancel'}</button>${S.imported?'<button class="btn">Download skipped rows</button>':''}</div>`; },
+tx(){ return `<div class="sheet-head"><h3>Send details</h3><button class="icon-btn" data-act="close" aria-label="Close">${ic('x')}</button></div>${txDetail(TX[S.tx])}`; },
+};
+
+/* ---------- auth ---------- */
+function authArt(){
+  return `<div class="auth-art"><div>${brand()}<h1>Reach recruiters from your own inbox.</h1><p>Keep your HR contacts in one place, send personalised cold emails with your resume attached, and see which ones landed.</p></div>
+    <div class="flow"><div><em>1</em><div><b>Add contacts</b><span>Type them in or import an Excel or PDF list.</span></div></div>
+    <div><em>2</em><div><b>Pick a template and resume</b><span>Variables like hr_name fill in for each person.</span></div></div>
+    <div><em>3</em><div><b>Send and track</b><span>Every send is logged with the server's reply.</span></div></div></div></div>`;
+}
+const pwField = (id,label,ph='At least 8 characters') => `<div class="field"><label for="${id}">${label}</label><div class="pw"><input class="input" id="${id}" type="password" placeholder="${ph}"><button class="link" data-act="peek:${id}">Show</button></div></div>`;
+const AUTH = {
+login(){ return `<h2>Welcome back</h2><p class="sub">Sign in to continue your outreach.</p>
+  <div class="field"><label for="l_email">Email</label><input class="input" id="l_email" type="email" value="${ME.email}"></div>
+  ${pwField('l_pw','Password')}
+  <div class="row-between"><label class="cbx"><input type="checkbox" id="l_rem" checked>Keep me signed in</label><button class="link" data-go="forgot">Forgot password?</button></div>
+  <button class="btn btn-primary btn-block" data-go="dashboard">Sign in</button>
+  <div class="divider">or</div>
+  <button class="btn btn-block gbtn">${G}Continue with Google</button>
+  <p class="muted" style="text-align:center;margin:0">New to ColdReach? <button class="link" data-go="signup">Create an account</button></p>`; },
+signup(){
+  const st = `<div class="stepper">${[1,2,3].map(n=>`<i class="${n<=S.step?'on':''}"></i>`).join('')}<span style="margin-left:6px">Step ${S.step} of 3</span></div>`;
+  if (S.step===1) return st+`<h2>Create your account</h2><p class="sub">We'll send a code to verify your email.</p>
+    <div class="field"><label for="s_name">Full name</label><input class="input" id="s_name" value="Saurabh A."></div>
+    <div class="field"><label for="s_email">Email</label><input class="input" id="s_email" type="email" value="${ME.email}"></div>
+    <div class="field"><label for="s_mobile">Mobile</label><input class="input" id="s_mobile" value="98765 43210"><span class="hint">10–15 digits. Not verified, used only on your emails.</span></div>
+    <button class="btn btn-primary btn-block" data-act="step:2">Send verification code</button>
+    <div class="divider">or</div><button class="btn btn-block gbtn">${G}Sign up with Google</button>
+    <p class="muted" style="text-align:center;margin:0">Already have an account? <button class="link" data-go="login">Sign in</button></p>`;
+  if (S.step===2) return st+`<h2>Check your email</h2><p class="sub">Enter the 6-digit code sent to <b>${ME.email}</b>.</p>
+    <div class="otp">${[0,1,2,3,4,5].map(i=>`<input inputmode="numeric" maxlength="1" id="otp${i}" aria-label="Digit ${i+1}">`).join('')}</div>
+    <div class="row-between"><span class="muted">Code expires in <b class="num">09:41</b></span><button class="link">Resend code</button></div>
+    <button class="btn btn-primary btn-block" data-act="step:3">Verify email</button>
+    <button class="link" data-act="step:1">${'← Change email'}</button>`;
+  return st+`<h2>Set a password</h2><p class="sub">Your email is verified. One last step.</p>
+    ${pwField('s_pw','Password')}
+    <div class="meter" id="meter"><i></i><i></i><i></i><i></i></div><span class="hint muted" id="meterTxt" style="margin-top:-10px;font-size:12px">Use 8+ characters with a number and a symbol.</span>
+    ${pwField('s_pw2','Confirm password','Type it again')}
+    <button class="btn btn-primary btn-block" data-go="dashboard">Create account</button>`;
+},
+forgot(){
+  if (S.fstep===1) return `<h2>Reset your password</h2><p class="sub">Enter your account email and we'll send a 6-digit code.</p>
+    <div class="field"><label for="f_email">Email</label><input class="input" id="f_email" type="email" value="${ME.email}"></div>
+    <button class="btn btn-primary btn-block" data-act="fstep:2">Send code</button>
+    <button class="link" data-go="login">← Back to sign in</button>`;
+  return `<h2>Choose a new password</h2><p class="sub">Code sent to <b>${ME.email}</b>.</p>
+    <div class="field"><label for="otp0">Code</label><div class="otp">${[0,1,2,3,4,5].map(i=>`<input inputmode="numeric" maxlength="1" id="otp${i}" aria-label="Digit ${i+1}">`).join('')}</div></div>
+    ${pwField('f_pw','New password')}
+    <button class="btn btn-primary btn-block" data-go="login">Reset password</button>
+    <button class="link" data-act="fstep:1">← Use a different email</button>`;
+},
+};
+function authShell(){
+  return `<div class="auth">${authArt()}<div class="auth-form"><div class="auth-box"><div class="auth-mbrand">${brand()}</div>${AUTH[S.screen]()}</div></div></div>`;
+}
+
+/* ---------- render + events ---------- */
+const root = document.getElementById('root');
+function render(keepScroll){
+  const m = document.getElementById('main'), y = m ? m.scrollTop : 0;
+  const isAuth = ['login','signup','forgot'].includes(S.screen);
+  root.innerHTML = isAuth ? authShell() : shell();
+  if (keepScroll && document.getElementById('main')) document.getElementById('main').scrollTop = y;
+  document.getElementById('jump').value = S.screen;
+  document.getElementById('protoTheme').innerHTML = themeIcon();
+}
+document.getElementById('jump').innerHTML = SCREENS.map(([id,l,a])=>`<option value="${id}">${a?'Auth · ':''}${l}</option>`).join('');
+document.getElementById('jump').addEventListener('change', e => { S.screen=e.target.value; S.step=1; S.fstep=1; S.modal=null; S.drawer=false; render(); });
+
+function toast(msg){
+  const t = document.getElementById('toast'); if(!t) return;
+  t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(()=>{t.hidden=true},2200);
+}
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-go],[data-act]');
+  if (!el) return;
+  if (el.dataset.act==='close' && e.target.closest('[data-stop]') && !e.target.closest('button[data-act="close"]')) return;
+  if (el.dataset.go){ e.preventDefault(); S.screen=el.dataset.go; S.drawer=false; S.modal=null; S.step=1; S.fstep=1; render(); return; }
+  const [a,v] = el.dataset.act.split(/:(.*)/s);
+  switch(a){
+    case 'size': document.getElementById('device').dataset.size=v; document.querySelectorAll('[data-act^="size:"]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.act==='size:'+v)); return;
+    case 'theme': document.documentElement.dataset.theme = effectiveTheme()==='dark'?'light':'dark'; render(true); return;
+    case 'menu': S.drawer=true; break;
+    case 'close': S.drawer=false; S.modal=null; S.imported=false; break;
+    case 'modal': S.modal=v; break;
+    case 'step': S.step=+v; break;
+    case 'fstep': S.fstep=+v; break;
+    case 'hist': S.hist=v; break;
+    case 'tx': S.tx=+v; if(!isWide()) S.modal='tx'; break;
+    case 'opentx': S.tx=+v; S.modal='tx'; break;
+    case 'tpl': S.tpl=+v; break;
+    case 'set': S.set=v; break;
+    case 'mode': S.mode=v; break;
+    case 'imported': S.imported=true; break;
+    case 'usw': S.users[+v].on=!S.users[+v].on; break;
+    case 'send': toast(S.mode==='single'?'Email sent to Priya Sharma':'Sending to 1,186 contacts…'); return;
+    case 'toast': S.modal=null; render(true); toast(v); return;
+    case 'peek': { const i=document.getElementById(v); i.type = i.type==='password'?'text':'password'; el.textContent = i.type==='password'?'Show':'Hide'; return; }
+    case 'copy': navigator.clipboard?.writeText(v).then(()=>toast('Request ID copied'), ()=>toast('Select the ID to copy it')); return;
+  }
+  render(true);
+});
+document.addEventListener('keydown', e => { if(e.key==='Enter' && e.target.classList.contains('txrow')) e.target.click(); if(e.key==='Escape' && (S.modal||S.drawer)){S.modal=null;S.drawer=false;render(true);} });
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.id && t.id.startsWith('otp') && t.value){ const n=document.getElementById('otp'+(+t.id.slice(3)+1)); if(n) n.focus(); }
+  if (t.id==='s_pw'){
+    const v=t.value; let s=0; if(v.length>=8)s++; if(/\d/.test(v))s++; if(/[^A-Za-z0-9]/.test(v))s++; if(v.length>=12&&/[A-Z]/.test(v))s++;
+    const c = ['var(--line)','var(--err)','var(--warn)','var(--ok)','var(--ok)'][s];
+    document.querySelectorAll('#meter i').forEach((b,i)=>b.style.background = i<s?c:'var(--line)');
+    document.getElementById('meterTxt').textContent = ['Use 8+ characters with a number and a symbol.','Weak','Okay','Strong','Very strong'][s];
+  }
+});
+document.addEventListener('change', e => { if(e.target.dataset.role){ S.users[+e.target.dataset.role].role=e.target.value; } });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', ()=>render(true));
+render();
+</script>
+
+</html>
