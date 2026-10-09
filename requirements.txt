@@ -6,7 +6,7 @@ asyncpg
 apscheduler
 python-dotenv
 python-multipart
-pydentic
+pydantic
 passlib[bcrypt]
 python-jose[cryptography]
 cryptography
