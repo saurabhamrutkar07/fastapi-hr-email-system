@@ -1,5 +1,5 @@
 import asyncio
-import random 
+import secrets 
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException,status,Depends
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from app.database.database import get_db
 from app.models.models import User,OTP, RevokedRefreshToken
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,decode_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token
 from app.core.mailer import send_email
 from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL
 from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,RefreshTokenRequest,ForgotPasswordRequest, ResetPasswordRequest
@@ -22,7 +22,7 @@ async def generate_and_send_otp(user:User, purpose:str,db:AsyncSession)-> None:
     emails the plain code to them. Used by both signup and 
     forgot-password files
     """
-    otp_code = f"{random.randint(0,999999):06d}"
+    otp_code = f"{secrets.randbelow(1_000_000):06d}"
     otp_now = OTP(
         user_id = user.id,
         otp_hash = hash_password(otp_code),
@@ -131,7 +131,7 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
-    redirect_url = f"{FRONTEND_URL}/oauth-success?token={access_token}&refresh={refresh_token}"
+    redirect_url = f"{FRONTEND_URL}/oauth-success#token={access_token}&refresh={refresh_token}"
     return RedirectResponse(url=redirect_url)
 
 @router.post("/signup", response_model = SignupResponse)
@@ -145,10 +145,18 @@ async def signup(payload: SignupRequest,db: AsyncSession=Depends(get_db)):
     result = await db.execute(select(User).where(User.email == payload.email))
     existing = result.scalar_one_or_none()
     if existing is not None:
-        raise HTTPException(
-            status_code= status.HTTP_400_BAD_REQUEST,
-            detail= "An account with this email already exists."
-        )
+        if existing.is_active:
+            raise HTTPException(
+                status_code= status.HTTP_400_BAD_REQUEST,
+                detail= "An account with this email already exists."
+            )
+        #Signup was started but never finished (OTP or signup token expired).
+        #Send a fresh code insted of locking this email out forever.
+        await generate_and_send_otp(existing,purpose='signup',db=db)
+        return SignupResponse(
+            user_id=existing.id,
+            message="Signup initiated. Check your email for the verification OTP."
+        )  
 
     user = User(
         name = payload.name,
@@ -224,21 +232,36 @@ async def verify_otp(payload:VerifyOTPRequest, db:AsyncSession = Depends(get_db)
     user.is_email_verified = True 
     await db.commit()
 
-    return {"message": "Email Verified successfully. Proceed to set your password."}
+    return {
+        "message": "Email Verified successfully. Proceed to set your password.",
+         "signup_token": create_signup_token(user.id,user.email),   
+        }
 
 @router.post("/set-password")
 async def set_password(payload:SetPasswordRequest, db: AsyncSession = Depends(get_db)):
     """
-    Final step of sign up -- sets the user's password and activates the account. Requires email to already be verified.
+      Final step of sign up -- sets the user's password and activated the account.
+      Requires the signup_token returned by /auth.verify-otp, so only the person 
+      who just entered the correct OTP can choose the password.  
     """
+    invalid_token = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Your verification has expired. Sign up again to get a new code."
+    )
+    try:
+        token_data = decode_token(payload.signup_token)
+    except JWTError:
+        raise invalid_token
+
+    if token_data.get('type') != "signup":
+        raise invalid_token
+    
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
-    if user is None:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail= "No account found with this email."
-        )
+    # The token must belong to this exact user, not just any valid signup token
+    if user is None or str(user.id) != token_data.get("sub"):
+        raise invalid_token
 
     if not user.is_email_verified: 
         raise HTTPException(

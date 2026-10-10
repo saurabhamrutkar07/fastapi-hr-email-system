@@ -10,6 +10,7 @@
     { "key": "refresh_token", "value": "" },
     { "key": "signup_email", "value": "testuser@example.com" },
     { "key": "otp_code", "value": "" },
+    { "key": "signup_token", "value": "" },
     { "key": "user_id", "value": "" },
     { "key": "template_id", "value": "" },
     { "key": "resume_id", "value": "" },
@@ -39,6 +40,18 @@
         },
         {
           "name": "2. Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set(\"signup_token\", pm.response.json().signup_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -48,7 +61,7 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"otp_code\": \"{{otp_code}}\"\n}"
             },
-            "description": "Set the otp_code collection variable from the email you received, then run this."
+            "description": "Set the otp_code collection variable from the email you received, then run this. On success it saves signup_token for Set Password."
           }
         },
         {
@@ -60,8 +73,9 @@
             "url": "{{base_url}}/auth/set-password",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"password\": \"MyPassword123\"\n}"
-            }
+              "raw": "{\n  \"email\": \"{{signup_email}}\",\n  \"signup_token\": \"{{signup_token}}\",\n  \"password\": \"MyPassword123\"\n}"
+            },
+            "description": "Uses the signup_token saved by Verify OTP (valid for 15 minutes). If it expired, run Signup again to get a new OTP."
           }
         },
         {

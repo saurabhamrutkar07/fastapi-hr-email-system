@@ -17,7 +17,8 @@ from app.core.config import (
     JWT_SECRET_KEY,
     JWT_ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
-    REFRESH_TOKEN_EXPIRE_DAYS
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    SIGNUP_TOKEN_EXPIRE_MINUTES,
 )
 from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -79,6 +80,17 @@ def create_refresh_token(data:dict) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh","jti": str(uuid.uuid4())})
+    return jwt.encode(to_encode,JWT_SECRET_KEY,algorithm=JWT_ALGORITHM)
+
+def create_signup_token(user_id:int, email:str)-> str:
+    """
+        Creates a short-lived token returned by /auth/verify-otp.
+        /auth/set-password requires it, which proves the caller is the 
+        person who just entered the correct OPT -- not someone who only 
+        knows the email address.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=SIGNUP_TOKEN_EXPIRE_MINUTES)
+    to_encode = {"sub": str(user_id), "email": email,"exp": expire, "type": "signup"}
     return jwt.encode(to_encode,JWT_SECRET_KEY,algorithm=JWT_ALGORITHM)
 
 def decode_token(token:str)-> dict:

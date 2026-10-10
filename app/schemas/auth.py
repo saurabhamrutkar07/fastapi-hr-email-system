@@ -17,6 +17,7 @@ class VerifyOTPRequest(BaseSchema):
 
 class SetPasswordRequest(BaseSchema):
     email : EmailStr
+    signup_token : str = Field(max_length=1024)
     password : str = Field(min_length=8,max_length=128)
 
 class LoginRequest(BaseSchema):
