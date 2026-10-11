@@ -4,6 +4,7 @@ import AppLayout from './layouts/AppLayouts'
 import AuthLayout from './layouts/AuthLayout'
 import ComingSoon from './pages/ComingSoon'
 import LoginPage from './pages/auth/LoginPage'
+import SignupPage from './pages/auth/SignupPage'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
       <Route element={<RequireGuest />}>
         <Route element={<AuthLayout />}>
           <Route path="login" element={<LoginPage />} />
+          <Route path="signup" element={<SignupPage />} />
         </Route>
       </Route>
 
