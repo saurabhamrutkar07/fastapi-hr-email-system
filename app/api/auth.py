@@ -62,7 +62,7 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
     Handles Google's redirect after the user approves consent. Exchanges
     the authorization code for tokens, fetches the user's Google profile,
     finds or creates the matching local user, and redirects to the
-    frontend with our own access + referesh tokens in the query string.
+    frontend with our own access + referesh tokens in the URL fragment (#).
     """
 
     import httpx # circular import
@@ -100,6 +100,14 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
 
         google_user = userinfo_response.json()
 
+    # Only trust the email if Google has verified it. Otherwise someone could make a
+    # Google account with another person's address and take over that person's account.
+    if not google_user.get('email_verified'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Your Google email address is not verified. Verify with Google, then try again."
+        )
+    
     google_id = google_user["sub"]
     email = google_user["email"]
     name = google_user.get("name",email)
@@ -124,6 +132,12 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
         await db.commit()
         await db.refresh(user)
     elif user.google_id is None:
+        # Same email already registered by normal signup: link Google to that account.
+        # If that signup was never finished (no password yet), Google has just proven
+        # the email is theirs, so finish it here instead of failing the sign-in.
+        if user.password_hash is None and not user.is_active:
+            user.is_email_verified = True
+            user.is_active = True
         user.google_id = google_id
         await db.commit()
 
