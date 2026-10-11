@@ -57,11 +57,13 @@ export default function AppLayout() {
 
 // rail = true: labels hidden between 640px and 1024px (icon-only sidebar)
 function SideNav({ rail = false, onNavigate }) {
+  const { user } = useAuth()
+  const groups = NAV_GROUPS.filter((group) => !group.adminOnly || user?.role === 'admin')
   const showOnWide = rail ? 'hidden lg:block' : ''
 
   return (
     <nav className="flex flex-col gap-0.5">
-      {NAV_GROUPS.map((group) => (
+      {groups.map((group) => (
         <div key={group.label} className="flex flex-col gap-0.5">
           <p className={`px-2.5 pb-1.5 pt-3.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted ${showOnWide}`}>
             {group.label}

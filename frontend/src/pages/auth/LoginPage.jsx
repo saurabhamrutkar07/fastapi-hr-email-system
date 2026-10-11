@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { authApi } from "../../api/auth";
 import { getErrorMessage } from "../../api/client";
 import { useAuth } from "../../auth/context";
@@ -13,7 +13,6 @@ import PasswordInput from "../../components/PasswordInput";
 
 export default function LoginPage(){
     const { login } = useAuth()
-    const navigate = useNavigate()
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -38,8 +37,8 @@ export default function LoginPage(){
         setError('')
         setLoading(true)
         try{
+            // On success the RequireGuest gatekeeper sends the user into the app
             await login(email,password)
-            navigate('/', {replace:true})
         }catch(err){
             setError(getErrorMessage(err))
             setLoading(false)

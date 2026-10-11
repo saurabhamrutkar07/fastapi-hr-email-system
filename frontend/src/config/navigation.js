@@ -18,8 +18,9 @@ export const NAV_GROUPS = [
         ],
     },
     {
-        // Shown to everyone for now; Step 3 (auth) hides it for non-admins
+        // Only users with role "admin" see this group
         label: 'Admin',
+        adminOnly : true,
         items: [{to: '/admin/users', label:'Users',icon:'shield'}],
     }
 ]
