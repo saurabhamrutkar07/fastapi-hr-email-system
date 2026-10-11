@@ -10,6 +10,8 @@
   --ok: #16A34A;  --ok-text: #15803D;  --ok-soft: #DCFCE7;
   --warn: #D97706;  --warn-text: #B45309;  --warn-soft: #FEF3C7;
   --err: #DC2626;  --err-text: #B91C1C;  --err-soft: #FEE2E2;
+  --brand-panel: #1E3A8A;  --on-brand: #FFFFFF;  --on-brand-muted: #C3CEEB;  --on-brand-accent: #5EEAD4;
+  --on-brand-line: rgba(255, 255, 255, 0.16);  --on-brand-card: rgba(255, 255, 255, 0.07);
   --mark-bg: #1E3A8A;  --mark-fg: #FFFFFF;  --logo-dot: #0D9488;  --logo-arrow: #FFFFFF;
   color-scheme: light;
 }
@@ -24,6 +26,8 @@
   --ok: #22C55E;  --ok-text: #4ADE80;  --ok-soft: #10301F;
   --warn: #F59E0B;  --warn-text: #FBBF24;  --warn-soft: #3A2A0C;
   --err: #EF4444;  --err-text: #F87171;  --err-soft: #3D1517;
+  --brand-panel: #172C66;  --on-brand: #FFFFFF;  --on-brand-muted: #B9C6EC;  --on-brand-accent: #5EEAD4;
+  --on-brand-line: rgba(255, 255, 255, 0.14);  --on-brand-card: rgba(255, 255, 255, 0.06);
   --mark-bg: #2B4DB3;  --mark-fg: #FFFFFF;  --logo-dot: #2DD4BF;  --logo-arrow: #042F2E;
   color-scheme: dark;
 }
@@ -54,6 +58,12 @@
   --color-err: var(--err);
   --color-err-text: var(--err-text);
   --color-err-soft: var(--err-soft);
+  --color-brand-panel: var(--brand-panel);
+  --color-on-brand: var(--on-brand);
+  --color-on-brand-muted: var(--on-brand-muted);
+  --color-on-brand-accent: var(--on-brand-accent);
+  --color-on-brand-line: var(--on-brand-line);
+  --color-on-brand-card: var(--on-brand-card);
   --color-mark-bg: var(--mark-bg);
   --color-mark-fg: var(--mark-fg);
   --color-logo-dot: var(--logo-dot);
@@ -68,6 +78,14 @@
 body {
   @apply bg-bg text-fg font-sans antialiased;
 }
+
+/* Logo on the navy panel: white tile, navy envelope */
+.logo-inverted {
+  --mark-bg: var(--on-brand);
+  --mark-fg: var(--brand-panel);
+}
+
+
 
 
 /* Visible keyboard focus everywhere */

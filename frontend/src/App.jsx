@@ -1,11 +1,17 @@
 import { Route, Routes } from 'react-router'
 import AppLayout from './layouts/AppLayouts'
 import ComingSoon from './pages/ComingSoon'
+import AuthLayout from './layouts/AuthLayout'
+import LoginPage from './pages/auth/LoginPage'
 
 export default function App() {
   return (
     <Routes>
       {/* Every page inside this Route gets the sidebar / top bar / bottom nav */}
+      {/* Sign in / sign up pages: navy panel + form, no sidebar */}
+      <Route element={<AuthLayout />}>
+        <Route path="login" element={<LoginPage />} />
+      </Route>
       <Route element={<AppLayout />}>
         <Route index element={<ComingSoon title="Dashboard" description="Your outreach over the last 14 days." />} />
         <Route path="contacts" element={<ComingSoon title="HR Contacts" description="Recruiters you can email." />} />

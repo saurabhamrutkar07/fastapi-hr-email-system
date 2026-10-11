@@ -26,13 +26,18 @@ export function LogoMark({className = 'size-8'}){
 }
 
 // nameClassName lets the sidebar hide the word "ColdReach" in tablet (rail) mode
-export default function Logo({nameClassName = ''}){
-    return(
-       <div className="flex items-center gap-2.5 font-display text-[17px] font-bold text-brand-ink">
-        <LogoMark />
-        <span className={nameClassName}>
-            Cold<span className="text-primary">Reach</span>
-        </span>
-        </div> 
+// inverted: white version for the navy panel on the login page
+export default function Logo({ nameClassName = '', inverted = false }) {
+    return (
+        <div
+            className={`flex items-center gap-2.5 font-display text-[17px] font-bold ${
+                inverted ? 'logo-inverted text-on-brand' : 'text-brand-ink'
+            }`}
+        >
+            <LogoMark />
+            <span className={nameClassName}>
+                Cold<span className={inverted ? 'text-on-brand-accent' : 'text-primary'}>Reach</span>
+            </span>
+        </div>
     )
 }
