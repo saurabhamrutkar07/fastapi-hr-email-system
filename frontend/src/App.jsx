@@ -6,6 +6,7 @@ import ComingSoon from './pages/ComingSoon'
 import LoginPage from './pages/auth/LoginPage'
 import SignupPage from './pages/auth/SignupPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import OAuthSuccessPage from './pages/auth/OAuthSuccessPage'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="login" element={<LoginPage />} />
           <Route path="signup" element={<SignupPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path='oauth-success' element={<OAuthSuccessPage/>}/>
 
         </Route>
       </Route>
