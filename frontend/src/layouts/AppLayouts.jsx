@@ -4,9 +4,21 @@ import Icon from '../components/Icon'
 import Logo from '../components/Logo'
 import useTheme from '../hooks/useTheme'
 import { BOTTOM_NAV, MORE_PATHS, NAV_GROUPS } from '../config/navigation'
+import { useAuth } from '../auth/context'
 
-// Placeholder until Step 3 loads the signed-in user from the backend
-const CURRENT_USER = { name: 'Saurabh A.', email: 'saurabh.dev@example.com', initials: 'SA' }
+// "Saurabh Amrutkar" -> 'SA'
+function initials(name='') {
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join('')
+      .slice(0,2)
+      .toUpperCase() || '?'
+  )
+  
+}
 
 const ICON_BTN =
   'grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-surface text-fg hover:bg-surface-2'
@@ -78,6 +90,7 @@ function SideNav({ rail = false, onNavigate }) {
 }
 
 function UserFooter({ rail = false }) {
+  const { user, logout } = useAuth()
   return (
     <div
       className={`mt-auto flex items-center gap-2.5 border-t border-line px-1.5 pt-2.5 ${
@@ -86,10 +99,10 @@ function UserFooter({ rail = false }) {
     >
       <Avatar />
       <div className={`min-w-0 flex-1 ${rail ? 'hidden lg:block' : ''}`}>
-        <p className="text-[13px] font-bold">{CURRENT_USER.name}</p>
-        <p className="truncate text-xs text-muted">{CURRENT_USER.email}</p>
+        <p className="text-[13px] font-bold">{user?.name ?? 'Not signed in'}</p>
+        <p className="truncate text-xs text-muted">{user?.email}</p>
       </div>
-      <button className={ICON_BTN} title="Sign out" aria-label="Sign out">
+      <button className={ICON_BTN} onClick={logout} title="Sign out" aria-label="Sign out">
         <Icon name="logout" />
       </button>
     </div>
@@ -97,9 +110,10 @@ function UserFooter({ rail = false }) {
 }
 
 function Avatar() {
+  const { user } = useAuth()
   return (
     <span className="grid size-[34px] shrink-0 place-items-center rounded-full bg-brand-soft text-[12.5px] font-bold text-brand">
-      {CURRENT_USER.initials}
+      {initials(user?.name)}
     </span>
   )
 }
