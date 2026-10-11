@@ -21,14 +21,14 @@ Security:
     the `key-secret` header.
 """
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from typing import List
 # Request/Response Pydantic schemas.
 # These classes validate incoming request data and structure outgoing responses.
 from app.core.encryption import decrypt_value
-from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest, EmailTransactionResponse
+from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest, EmailTransactionResponse, EmailStatsResponse
 from app.services.cold_email_service import send_email_to_individual, get_user_smtp_config,get_recruiters_for_sending,send_cold_emails_background,get_user_default_template, get_user_active_resume
-from app.database.repositories import get_transaction_by_request_id, list_email_transactions
+from app.database.repositories import get_transaction_by_request_id, list_email_transactions, get_email_stats
 from app.core.security import get_current_user
 from app.models.models import User
 from common.Logger import Logger
@@ -274,6 +274,28 @@ async def get_email_transactions_list(limit: int = 50, offset: int = 0,current_u
     )
 
     return transactions
+
+@router.get("/stats", response_model=EmailStatsResponse)
+async def get_email_stats_summary(
+    days:int = Query(14,ge=1,le=90,description="How many days back, today included"),
+    tz_offset_minutes: int = Query(0,ge=-720, le=840, description="Viewer's offset from UTC in minutes, e.g. 330 for India"),
+    current_user: User =Depends(get_current_user),
+):
+    """
+    Dashboard numbers : sent/failed per day for the last `days` days ,
+    their totals and success rate, and how many HR contacts exist. 
+    
+    Example: 
+        /email/stats?days=14&tz_offset_minutes=330
+
+    Admins see every user's emails like GET/email/transactions; everyone 
+    else sees only their own. 
+    """
+
+    filter_user_id = None if current_user.role == 'admin' else current_user.id 
+    return await get_email_stats(days=days,tz_offset_minutes=tz_offset_minutes,user_id=filter_user_id)
+
+
 
 
 

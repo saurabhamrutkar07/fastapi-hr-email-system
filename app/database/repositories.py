@@ -8,7 +8,8 @@ Encapsulates all asynchronous database operations (CRUD) for:
 ===============================================================================
 """
 
-from sqlalchemy import select, desc
+from datetime import datetime, time, timedelta, timezone
+from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.database.database import AsyncSessionLocal
@@ -470,4 +471,59 @@ async def list_email_transactions(limit: int = 50, offset: int = 0,user_id:int |
         result = await session.execute(query)
         return result.scalars().all()
 
+
+async def get_email_stats(days:int, tz_offset_minutes:int, user_id:int|None = None)-> dict :
+    """
+    Counts sent and failed emails for each of the last `days` days, for the 
+    dashboard. Days are calendar days in the viewer's timezone
+    (`tz_offset_minutes` ahead of UTC, e.g. 330 for India), so an email sent
+    at 00:30 IST counts on that day, not on the previous UTC day.
+    
+    `user_id=None` counts every user's emails (admin view), like 
+    `list_email_transactions`. 
+    """
+
+    offset = timedelta(minutes=tz_offset_minutes)
+    today = (datetime.now(timezone.utc)+ offset).date()
+    first_day = today - timedelta(days=days-1)
+    # Midnight at the start of first_day in the viewer's timezone, expressed in UTC
+    window_start = datetime.combine(first_day, time.min, tzinfo=timezone.utc) - offset
+
+    query = select(EmailTransaction.created_at, EmailTransaction.status).where(
+        EmailTransaction.created_at >= window_start
+    )
+    if user_id is not None:
+        query = query.where(EmailTransaction.user_id == user_id)
+
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(query)).all()
+        contacts_total = await session.scalar(select(func.count()).select_from(HRContactsV2))
+
+    # One bucket per day, including days with no emails, so the chart has no gaps 
+    daily = {first_day + timedelta(days=i): {"sent":0, "failed":0} for i in range(days)}
+    for created_at, status in rows:
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        day = (created_at.astimezone(timezone.utc) + offset).date()
+        if day not in daily:
+            continue
+        if status == 'SUCCESS':
+            daily[day]["sent"] += 1 
+        elif status == "FAILED":
+            daily[day]["failed"] += 1
+
+    sent = sum(counts["sent"] for counts in daily.values())
+    failed = sum(counts["failed"] for counts in daily.values())
+    total = sent + failed 
+
+    return{
+        "days": days,
+        "total": total,
+        "sent": sent,
+        "failed": failed,
+        "success_rate": round(sent/total * 100 , 1) if total else None,
+        "contacts_total": contacts_total or 0, 
+        "daily": [{"date":day, **counts} for day, counts in daily.items()],
+    }
+    
 

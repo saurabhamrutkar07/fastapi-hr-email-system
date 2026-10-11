@@ -11,7 +11,7 @@ Defines data validation models for:
 
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
-from datetime import datetime
+from datetime import date, datetime
 from app.schemas.base import BaseSchema
 
 
@@ -66,4 +66,23 @@ class EmailTransactionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DailyEmailCount(BaseModel):
+    """
+    Emails for one calendar day (in the viewer's timezone).
+    """
+    date: date 
+    sent : int = Field(description="Emails the mail server accepted (SUCCESS)")
+    failed: int = Field(description="Emails that could not be sent (FAILED)")
+
+class EmailStatsResponse(BaseModel):
+    """
+    Dashboard summary for the last `days` days, oldest day first in `daily`.
+    """
+    days: int 
+    total: int = Field(description="sent + failed in the window")
+    sent: int 
+    failed: int 
+    success_rate : Optional[float] = Field(None, description="Percent sent, one decimal; null when nothing was attempted")
+    contacts_total: int = Field(description="HR contacts available to email")
+    daily: List[DailyEmailCount]
 
