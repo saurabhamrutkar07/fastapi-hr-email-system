@@ -5,6 +5,7 @@ import Button, {ButtonLink} from "../components/Button";
 import Alert from "../components/Alert";
 import Icon from "../components/Icon";
 import useApi from "../hooks/useApi";
+import useSetupStatus from '../hooks/useSetupStatus'
 import EmailsChart from '../components/EmailsChart'
 import ReadyChecklist from '../components/ReadyChecklist'
 import RecentSends from '../components/RecentSends'
@@ -21,6 +22,9 @@ const formatNumber = (n) => n.toLocaleString('en-IN')
 export default function DashboardPage(){
     const { user } = useAuth()
     const stats = useApi(dashboardApi.stats)
+    const setup = useSetupStatus()
+    // A new user sees the setup checklist right under the cards (on phones the columns stack)
+    const setupFirst = !setup.loading && !setup.allReady
     const firstName = user?.name?.split(" ")[0]??''
 
     return (
@@ -43,7 +47,9 @@ export default function DashboardPage(){
           </ButtonLink>
         </div>
       </div>
-
+      
+      {!setup.loading && setup.readyCount === 0 && <WelcomeBanner firstName={firstName} nextStep={setup.nextStep}/>}        
+    
       <StatCards stats={stats} />
       
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -51,9 +57,10 @@ export default function DashboardPage(){
           {stats.data ? <EmailsChart days={stats.data.daily} /> : !stats.error && <ChartSkeleton />}
           <RecentSends />
         </div>
-        <div className="min-w-0">
-          <ReadyChecklist />
+        <div className={`min-w-0 ${setupFirst ? 'order-first xl:order-none' : ''}`}>
+          <ReadyChecklist setup={setup} />
         </div>
+
       </div>
     </div>
   )
@@ -129,5 +136,22 @@ function ChartSkeleton() {
       <div className="h-4 w-32 animate-pulse rounded bg-surface-2" />
       <div className="mt-5 h-[180px] animate-pulse rounded bg-surface-2" />
     </div>
+  )
+}
+
+// Shown until the user has set up anything at all
+function WelcomeBanner({ firstName, nextStep }) {
+  return (
+    <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-brand-soft px-5 py-4">
+      <div className="min-w-0">
+        <p className="font-display text-[17px] font-bold text-brand-ink">
+          Welcome to ColdReach{firstName && `, ${firstName}`}
+        </p>
+        <p className="text-[13.5px] text-muted">
+          Three quick steps before your first email: connect your Gmail, write a template and upload your resume.
+        </p>
+      </div>
+      {nextStep && <ButtonLink to={nextStep.to}>Start setup</ButtonLink>}
+    </section>
   )
 }
