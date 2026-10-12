@@ -5,6 +5,7 @@ import Button, {ButtonLink} from "../components/Button";
 import Alert from "../components/Alert";
 import Icon from "../components/Icon";
 import useApi from "../hooks/useApi";
+import EmailsChart from '../components/EmailsChart'
 
 function greeting(){
     const hour = new Date().getHours()
@@ -42,6 +43,7 @@ export default function DashboardPage(){
       </div>
 
       <StatCards stats={stats} />
+      {stats.data ? <EmailsChart days={stats.data.daily} /> : !stats.error && <ChartSkeleton />}
     </div>
   )
 }
@@ -108,4 +110,13 @@ function StatCardSkeleton() {
         </div>
     )
     
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="rounded-xl border border-line bg-surface p-5" aria-hidden="true">
+      <div className="h-4 w-32 animate-pulse rounded bg-surface-2" />
+      <div className="mt-5 h-[180px] animate-pulse rounded bg-surface-2" />
+    </div>
+  )
 }
