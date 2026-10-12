@@ -6,6 +6,8 @@ import Alert from "../components/Alert";
 import Icon from "../components/Icon";
 import useApi from "../hooks/useApi";
 import EmailsChart from '../components/EmailsChart'
+import ReadyChecklist from '../components/ReadyChecklist'
+import RecentSends from '../components/RecentSends'
 
 function greeting(){
     const hour = new Date().getHours()
@@ -43,7 +45,16 @@ export default function DashboardPage(){
       </div>
 
       <StatCards stats={stats} />
-      {stats.data ? <EmailsChart days={stats.data.daily} /> : !stats.error && <ChartSkeleton />}
+      
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {stats.data ? <EmailsChart days={stats.data.daily} /> : !stats.error && <ChartSkeleton />}
+          <RecentSends />
+        </div>
+        <div className="min-w-0">
+          <ReadyChecklist />
+        </div>
+      </div>
     </div>
   )
 }

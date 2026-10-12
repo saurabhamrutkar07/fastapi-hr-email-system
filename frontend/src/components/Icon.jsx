@@ -15,6 +15,10 @@ const PATHS = {
   moon: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
+  check: 'M20 6L9 17l-5-5',
+  alert: 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  chevron: 'M9 18l6-6-6-6',
+
 }
 
 export default function Icon({ name, className = 'size-[18px]' }) {
