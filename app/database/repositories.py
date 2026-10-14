@@ -530,7 +530,7 @@ async def update_fresh_hr_contact(contact_id: int, payload)-> HRContactsV2| None
     """
     Replace a contact's details and its full email/phone lists with the 
     ones in `payload` (same shape as an add). Emails/phones the contact 
-    already had are kept (so `is_verfied` survies), removed ones are deleted, new ones are inserted; the first email/phone becomes primary. 
+    already had are kept (so `is_verified` survives), removed ones are deleted, new ones are inserted; the first email/phone becomes primary. 
     
     Returns `None` if there is no contact with this id. Raises `ValueError`
     if one of the emails/phones already belongs to a DIFFERENT contact,
