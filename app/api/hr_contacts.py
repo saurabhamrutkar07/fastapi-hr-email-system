@@ -14,8 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.database import get_db
 #from app.core.security import verify_key_secret
 from app.core.security import get_current_user,require_admin
-from app.models.models import User
-from app.services.cold_email_service import get_user_smtp_config
+
 
 from app.services.hr_contact_excel_service import (
     ALLOWED_EXTENSIONS,
@@ -31,6 +30,8 @@ from app.services.fresh_contact_service import (
     create_fresh_contact,
     create_fresh_contacts_bulk,
     list_fresh_contacts,
+    edit_fresh_contact,
+    remove_fresh_contact,
 )
 
 
@@ -174,10 +175,12 @@ async def upload_hr_contacts_file(
         await file.close()
 
 
-@router.post("/add", status_code=status.HTTP_201_CREATED,dependencies=[Depends(require_admin)])
+@router.post("/add", status_code=status.HTTP_201_CREATED)
 async def add_hr_contact_v2(payload: AddFreshContactRequest):
     """
-    Adds a single HR contact into `hr_contacts_v2`.
+    Adds a single HR contact into `hr_contacts_v2`. Any signed-in user may 
+    add one (the router requires a login); contacts are shared by everyone.
+    Bulk add and file upload stay admin-only.
     """
     return await create_fresh_contact(payload)
 
@@ -191,12 +194,30 @@ async def bulk_add_hr_contacts_v2(payload: BulkAddFreshContactsRequest):
 
 
 @router.get("/list", response_model=List[FreshContactResponse])
-async def get_hr_contacts_v2(current_user: User = Depends(get_current_user)):
+async def get_hr_contacts_v2():
     """
     Retrieves all HR contacts from `hr_contacts_v2`, including their full
-    `hr_contact_emails` and `hr_contact_phones` lists. Requires the 
-    current user to have their own SMTP credentialsconfigutred first -- 
-    no point shoiwnig hte list to someone who can't send from it yet.
+    `hr_contact_emails` and `hr_contact_phones` lists. Any signed-in user
+    can view them; sending still requires SMTP credentials. Search,
+    filters and paging run in the UI.
     """
-    await get_user_smtp_config(current_user.id)
     return await list_fresh_contacts()
+
+
+@router.put("/{contact_id}", dependencies=[Depends(require_admin)])
+async def update_hr_contact_v2(contact_id:int, payload:AddFreshContactRequest):
+    """
+    Admin only: replaces a contact's details and its email/phone lists.
+    Send the same body as `/add`; emails/phones left out are removed.
+    """
+    return await edit_fresh_contact(contact_id,payload)
+
+
+@router.delete("/{contact_id}",dependencies=[Depends(require_admin)])
+async def delete_hr_contact_v2(contact_id:int):
+    """
+    Admin only: deletes a contact together with its emails and phones.
+    """
+    return await remove_fresh_contact(contact_id)
+
+

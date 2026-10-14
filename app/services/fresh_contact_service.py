@@ -6,11 +6,13 @@ Coordinates business logic for:
 1. Creating single fresh recruiter entries.
 2. Bulk inserting multiple recruiter contacts.
 3. Listing all fresh recruiter contacts.
+4. Editing and deleting a contact.
 ===============================================================================
 """
 
+from fastapi import HTTPException, status
 from app.schemas.fresh_contacts import AddFreshContactRequest, BulkAddFreshContactsRequest
-from app.database.repositories import add_fresh_hr_contact, add_fresh_hr_contact_bulk, get_all_fresh_recruiters
+from app.database.repositories import add_fresh_hr_contact, add_fresh_hr_contact_bulk, delete_fresh_hr_contact ,get_all_fresh_recruiters, update_fresh_hr_contact
 
 
 async def create_fresh_contact(payload: AddFreshContactRequest):
@@ -67,7 +69,8 @@ async def list_fresh_contacts():
     """
     Business Logic: Fetches and formats all recruiter contacts from
     `hr_contacts_v2`, along with their full email list (`hr_contact_emails`)
-    and phone list (`hr_contact_phones`).
+    and phone list (`hr_contact_phones`). The UI searches, filters and 
+    pages this list itself.
     """
     recruiters = await get_all_fresh_recruiters()
     return [
@@ -78,6 +81,7 @@ async def list_fresh_contacts():
             "title": r.title,
             "company": r.company,
             "phone": r.phone,
+            "created_at": r.created_at,
             "emails": [
                 {
                     "email": e.email,
@@ -97,3 +101,36 @@ async def list_fresh_contacts():
         for r in recruiters
     ]
 
+
+async def edit_fresh_contact(contact_id:int, payload:AddFreshContactRequest):
+    """
+    Business logic: Replaces a contact's details and email/phone lists.
+    404 if the contact doesn't exist, 409 if an email/phone belongs to
+    another contact.
+    """
+
+    try:
+        contact = await update_fresh_hr_contact(contact_id,payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+    if contact is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Contact not found')
+
+    return{
+        "status": "success",
+        "message": "Contact updated",
+        "contact_id": contact.id
+    }
+
+
+async def remove_fresh_contact(contact_id:int):
+    """
+    Business Logic: Deletes a contact with its emails and phones.
+    404 if the contact doesn't exist.
+    """
+
+    if not await delete_fresh_hr_contact(contact_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Contact not found")
+
+    return {"status": "success", "message": "Contact deleted"}

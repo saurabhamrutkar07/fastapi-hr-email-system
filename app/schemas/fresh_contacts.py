@@ -10,6 +10,7 @@ Defines data validation models for:
 """
 
 from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
 from typing import Optional, List
 from app.schemas.base import BaseSchema
 
@@ -81,6 +82,7 @@ class FreshContactResponse(BaseModel):
     title: Optional[str] = None
     company: Optional[str] = None
     phone: Optional[str] = None
+    created_at: Optional[datetime]= None
     emails: List[EmailItem] = []
     phones: List[PhoneItem] = []
 

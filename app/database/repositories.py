@@ -525,5 +525,125 @@ async def get_email_stats(days:int, tz_offset_minutes:int, user_id:int|None = No
         "contacts_total": contacts_total or 0, 
         "daily": [{"date":day, **counts} for day, counts in daily.items()],
     }
+
+async def update_fresh_hr_contact(contact_id: int, payload)-> HRContactsV2| None:
+    """
+    Replace a contact's details and its full email/phone lists with the 
+    ones in `payload` (same shape as an add). Emails/phones the contact 
+    already had are kept (so `is_verfied` survies), removed ones are deleted, new ones are inserted; the first email/phone becomes primary. 
     
+    Returns `None` if there is no contact with this id. Raises `ValueError`
+    if one of the emails/phones already belongs to a DIFFERENT contact,
+    since emails and phones are unique across all contacts.
+    """
+    emails = _dedupe_preserve_order(
+        [payload.email, *getattr(payload,"additional_emails",[])]   
+    )
+
+    phones = _dedupe_preserve_order(
+        [payload.contact_number, *getattr(payload,"additional_phones",[])]
+    )
+
+    async with AsyncSessionLocal() as session:
+        contact = await session.get(
+            HRContactsV2,
+            contact_id,
+            options=[selectinload(HRContactsV2.emails), selectinload(HRContactsV2.phones)],
+        )
+
+        if contact is None:
+            return None
+
+        # ------------------------------------------------------------
+        # STEP 1: Refuse emails/phones that belong to someone else,
+        # checking both the child tables and the old parent columns.
+        # ------------------------------------------------------------
+        taken_email = await session.scalar(
+            select(HRContactEmail.email)
+            .where(HRContactEmail.email.in_(emails),HRContactEmail.contact_id != contact_id)
+            .union(
+                select(HRContactsV2.email)
+                .where(HRContactsV2.email.in_(emails), HRContactsV2.id != contact_id)
+            )
+            .limit(1)
+        )
+        if taken_email:
+            raise ValueError(f"{taken_email} already belongs to another contact")
+
+        if phones:
+            taken_phone = await session.scalar(
+                select(HRContactPhone.phone)
+                .where(HRContactPhone.phone.in_(phones), HRContactPhone.contact_id != contact_id)
+                .union(
+                    select(HRContactsV2.phone)
+                    .where(HRContactsV2.phone.in_(phones), HRContactsV2.id != contact_id)
+                )
+                .limit(1)
+            )
+            if taken_phone:
+                raise ValueError(f"{taken_phone} already belongs to another contact")
+
+        #------------------------------------------------------------
+        # STEP 2: Update the contact row itself.
+        #------------------------------------------------------------
+        contact.name = payload.name
+        contact.title = payload.title
+        contact.company = payload.company_name
+        contact.email = emails[0]
+        contact.phone = phones[0] if phones else None
+
+        # ------------------------------------------------------------
+        # STEP 3: Sync the child rows. Removing a row from the list
+        # deletes it (`delete-orphan` on the relationship).
+        # ------------------------------------------------------------
+        current_emails = {row.email: row for row in contact.emails}
+        for row in list(contact.emails):
+            if row.email not in emails:
+                contact.emails.remove(row)
+
+        for index,email in enumerate(emails):
+            row = current_emails.get(email)
+            if row:
+                row.is_primary = index == 0
+            else:
+                contact.emails.append(HRContactEmail(email=email,is_primary=index ==0))
+
+        current_phones = {row.phone: row for row in contact.phones}
+        for row in list(contact.phones):
+            if row.phone not in phones:
+                contact.phones.remove(row)
+        for index,phone in enumerate(phones):
+            row = current_phones.get(phone)
+            if row:
+                row.is_primary = index == 0
+            else:
+                contact.phones.append(HRContactPhone(phone= phone, is_primary=index == 0)) 
+
+        await session.commit()
+        return contact
+
+
+async def delete_fresh_hr_contact(contact_id: int)-> bool:
+    """
+    Deletes a contact along with its emails and phones. Returns `False`
+    if there is no contact with this id 
+    """
+    async with AsyncSessionLocal() as session:
+        contact = await session.get(
+            HRContactsV2,
+            contact_id,
+            options=[selectinload(HRContactsV2.emails), selectinload(HRContactsV2.phones)],
+        )
+        if contact is None:
+            return False 
+        await session.delete(contact)
+        await session.commit()
+        return True
+
+
+
+
+
+
+
 
