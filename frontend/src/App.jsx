@@ -8,6 +8,7 @@ import SignupPage from './pages/auth/SignupPage'
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import OAuthSuccessPage from './pages/auth/OAuthSuccessPage'
 import DashboardPage from './pages/DashboardPage'
+import ContactsPage from './pages/ContactsPage'
 
 export default function App() {
   return (
@@ -27,7 +28,7 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="contacts" element={<ComingSoon title="HR Contacts" description="Recruiters you can email." />} />
+          <Route path="contacts" element={<ContactsPage />} />
           <Route path="send" element={<ComingSoon title="Send Email" description="Send a cold email with your resume attached." />} />
           <Route path="history" element={<ComingSoon title="History" description="Every send attempt and the mail server's reply." />} />
           <Route path="templates" element={<ComingSoon title="Templates" description="Write once. Variables are filled in for each recruiter." />} />
