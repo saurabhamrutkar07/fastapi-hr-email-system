@@ -1,4 +1,5 @@
 import { formatDate } from "../utils/format";
+import Icon from "./Icon";
 
 // A contact's emails / phones, primary first. Older contacts may only have the single `email` / `phone` column.
 export function contactEmails(contact) {
@@ -25,11 +26,12 @@ function initials(name){
 /*
     One page of contacts: a table on wide screens, cards on phones and tablets.
     `showAdded` adds the "Added on" date (admins only).
+    `onEdit(contact)` adds an Edit button to each contact (admins only).
 */
-export default function ContactList({contacts, showAdded}) {
+export default function ContactList({contacts, showAdded, onEdit}) {
     return(
         <>
-            <div className="hidden overflow-x-auto lg:block">
+            <div className="hidden overflow-x-auto xl:block">
                <table className="w-full text-left text-[13.5px]">
                     <thead className="border-b border-line text-[12px] font-semibold uppercase tracking-wide text-muted">
                         <tr>
@@ -38,6 +40,8 @@ export default function ContactList({contacts, showAdded}) {
                             <th className="px-3 py-3 font-semibold">Emails</th>
                             <th className="px-3 py-3 font-semibold">Phones</th>
                             {showAdded && <th className="px-5 py-3 font-semibold">Added on</th>}
+                            {onEdit && <th className="w-px px-3 py-3"><span className="sr-only">Actions</span></th>}
+
                         </tr>
                     </thead>
                     <tbody>
@@ -50,13 +54,18 @@ export default function ContactList({contacts, showAdded}) {
                                 <td className="px-3 py-3">
                                     <Lines items={contactEmails(contact)} />
                                 </td>
-                                <td className="px-3 py-3 tabular-nums">
+                                <td className="whitespace-nowrap px-3 py-3 tabular-nums">
                                     <Lines items={contactPhones(contact)} />
                                 </td>
                                 {showAdded && (
                                     <td className="whitespace-nowrap px-5 py-3 text-muted tabular-nums">
                                         {contact.created_at ? formatDate(contact.created_at) : <Empty />}
                                     </td>  
+                                )}
+                                {onEdit && (
+                                    <td className="px-3 py-2">
+                                        <RowActions contact={contact} onEdit={onEdit} />
+                                    </td>
                                 )}
                             </tr>
                         ))}
@@ -65,12 +74,15 @@ export default function ContactList({contacts, showAdded}) {
             </div>
             
             {/* Phones: a plain list with dividers. Tablets: two columns of cards */}
-            <ul className="divide-y divide-line sm:grid sm:grid-cols-2 sm:gap-3 sm:divide-y-0 sm:p-4 lg:hidden">
+            <ul className="divide-y divide-line sm:grid sm:grid-cols-2 sm:gap-3 sm:divide-y-0 sm:p-4 xl:hidden">
                 {contacts.map((contact) => {
                     const phones = contactPhones(contact)
                     return(
                         <li key={contact.id} className="flex min-w-0 flex-col gap-3 p-4 sm:rounded-xl sm:border sm:border-line">
-                            <Person contact={contact} withCompany />
+                            <div className="flex items-start justify-between gap-2">
+                                <Person contact={contact} withCompany />
+                                {onEdit && <RowActions contact={contact} onEdit={onEdit} />}
+                            </div>
                             <div className="flex flex-col gap-1 text-[13.5px]">
                                 <Lines items={contactEmails(contact)} />
                                 {phones.length > 0 && (
@@ -90,6 +102,23 @@ export default function ContactList({contacts, showAdded}) {
         </>
     )   
 }
+
+// Buttons that change one contact (admins only)
+function RowActions({ contact, onEdit }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={() => onEdit(contact)}
+                aria-label={`Edit ${contact.name}`}
+                title="Edit"
+                className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg"
+            >
+                <Icon name="edit" className="size-4" />
+            </button>
+        </div>
+    )
+}
  
 // Initials circle + name, with the title (and on cards the company) underneath
 function Person({contact,withCompany = false}) {
@@ -107,13 +136,13 @@ function Person({contact,withCompany = false}) {
     )
 } 
 
-// One value per line; long emails wrap instead of stretching the table
+// One value per line. A very long email wraps only when it cannot fit
 function Lines({ items }) {
     if (!items.length) return <Empty/>
     return(
         <ul>
             {items.map((item) => (
-                <li key={item} className="break-all">
+                <li key={item} className="wrap-break-word">
                     {item}
                 </li>
             ))}

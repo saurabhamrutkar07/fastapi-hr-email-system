@@ -3,9 +3,11 @@ import { contactsApi } from "../api/contacts";
 import { useAuth } from "../auth/context";
 import Alert from "../components/Alert";
 import Button from "../components/Button";
+import ContactForm from "../components/ContactForm";
 import ContactList, { contactEmails, contactPhones } from "../components/ContactList";
 import Icon from "../components/Icon";
 import Input from '../components/Input'
+import Modal from "../components/Modal";
 import Pagination, { PAGE_SIZES } from "../components/Pagination";
 import Select from "../components/Select";
 import useApi from "../hooks/useApi";
@@ -20,7 +22,11 @@ export default function ContactsPage() {
     const [search, setSearch] = useState('')
     const [company, setCompany] = useState('')
     const [page,setPage] = useState(1)
-    const [pageSize, setPageSize] = useState(PAGE_SIZES[0])    
+    const [pageSize, setPageSize] = useState(PAGE_SIZES[0])
+    
+    // The add / edit popup: null = closed, { contact: null } = add, { contact } = edit that contact
+    const [formFor, setFormFor] = useState(null)
+    const [notice, setNotice] = useState('')
 
     // Newest first (a bigger id was added later)
     const all = useMemo(() => [...(contacts.data ?? [])].sort((a, b) => b.id - a.id), [contacts.data])
@@ -68,16 +74,43 @@ export default function ContactsPage() {
 
     const filtered = Boolean(search.trim()|| company)
 
+    function openForm(contact = null) {
+        setNotice('')
+        setFormFor({ contact })
+    }
+
+    // After a save: close the popup, say what happened and load the list again
+    function handleSaved({ merged }) {
+        const editing = Boolean(formFor.contact)
+        setFormFor(null)
+        setNotice(
+            editing
+                ? 'Changes saved.'
+                : merged
+                  ? 'That email or phone was already saved, so the new details were added to the existing contact.'
+                  : 'Contact added.',
+        )
+        contacts.reload()
+    }
+
     return(
         <div className="flex flex-col gap-5">
-            <div>
-                <h2 className="font-display text-[22px] font-bold text-brand-ink sm:text-[26px]">HR Contacts</h2>
-                <p className="mt-0.5 text-muted">
-                    {contacts.data
-                    ? `${formatNumber(all.length)} recruiters across ${formatNumber(companies.length)} companies.`
-                    : 'Recruiters you can email.'}
-                </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 className="font-display text-[22px] font-bold text-brand-ink sm:text-[26px]">HR Contacts</h2>
+                    <p className="mt-0.5 text-muted">
+                        {contacts.data
+                        ? `${formatNumber(all.length)} recruiters across ${formatNumber(companies.length)} companies.`
+                        : 'Recruiters you can email.'}
+                    </p>
+                </div>
+                <Button onClick={() => openForm()}>
+                    <Icon name="plus" />
+                    Add contact
+                </Button>
             </div>
+
+            <Alert tone="success">{notice}</Alert>
         
             {contacts.error ? (
                 <div className="flex flex-col items-start gap-3">
@@ -118,7 +151,7 @@ export default function ContactsPage() {
                     </Select>
                 </div>
 
-                <section className="overflow-hidden rounded-xl border border-line bg-surface">
+                <section className="min-w-0 overflow-hidden rounded-xl border border-line bg-surface">
                     {contacts.loading ? (
                     <ListSkeleton />
                     ) : all.length === 0 ? (
@@ -140,7 +173,7 @@ export default function ContactsPage() {
                             {formatNumber(matches.length)} of {formatNumber(all.length)} contacts match.
                         </p>
                         )}
-                        <ContactList contacts={pageItems} showAdded={isAdmin} />
+                        <ContactList contacts={pageItems} showAdded={isAdmin} onEdit={isAdmin ? openForm : undefined} />
                         <Pagination
                         page={currentPage}
                         pageSize={pageSize}
@@ -153,6 +186,15 @@ export default function ContactsPage() {
                 </section>
                 </>
             )}
+
+            <Modal
+                open={Boolean(formFor)}
+                onClose={() => setFormFor(null)}
+                title={formFor?.contact ? 'Edit contact' : 'Add contact'}
+                description={formFor?.contact ? undefined : 'Shared with everyone who uses ColdReach.'}
+            >
+                <ContactForm contact={formFor?.contact} onSaved={handleSaved} onCancel={() => setFormFor(null)} />
+            </Modal>
 
         </div>
     )
