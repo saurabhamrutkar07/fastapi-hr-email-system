@@ -2,7 +2,8 @@ import { Link } from 'react-router'
 
 const VARIANTS = {
     primary : 'border-primary bg-primary text-white hover:brightness-110',
-    secondary : 'border-line bg-surface text-fg hover:bg-surface-2'
+    secondary : 'border-line bg-surface text-fg hover:bg-surface-2',
+    danger : 'border-err bg-err text-white hover:brightness-110',
 }
 
 const BASE = 'inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 font-semibold'

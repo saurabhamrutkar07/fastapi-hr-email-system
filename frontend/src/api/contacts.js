@@ -13,5 +13,16 @@ export const contactsApi = {
     // Admin only. Replaces the contact's details and its email / phone lists. 409 when an email or
     // phone belongs to another contact
     update: (id, contact) => api.put(`/hr-contacts/v2/${id}`, contact).then((res)=> res.data),
+
+    // Admin only. Deletes the contact with its emails and phones
+    remove: (id) => api.delete(`/hr-contacts/v2/${id}`).then((res) => res.data),
+
+    // Admin only. Excel / CSV upload: { status, total_rows, created_contacts, existing_contacts,
+    //   emails_added, phones_added, skipped_contacts, errors: [{ row?, name?, error }] }
+    importFile: (file) => {
+        const body = new FormData()
+        body.append('file', file)
+        return api.post('/hr-contacts/v2/upload-file', body).then((res) => res.data)
+    },
 }
 

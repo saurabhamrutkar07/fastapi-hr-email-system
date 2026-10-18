@@ -26,9 +26,9 @@ function initials(name){
 /*
     One page of contacts: a table on wide screens, cards on phones and tablets.
     `showAdded` adds the "Added on" date (admins only).
-    `onEdit(contact)` adds an Edit button to each contact (admins only).
+        `onEdit(contact)` / `onDelete(contact)` add Edit and Delete buttons to each contact (admins only).
 */
-export default function ContactList({contacts, showAdded, onEdit}) {
+export default function ContactList({contacts, showAdded, onEdit, onDelete}) {
     return(
         <>
             <div className="hidden overflow-x-auto xl:block">
@@ -64,7 +64,7 @@ export default function ContactList({contacts, showAdded, onEdit}) {
                                 )}
                                 {onEdit && (
                                     <td className="px-3 py-2">
-                                        <RowActions contact={contact} onEdit={onEdit} />
+                                        <RowActions contact={contact} onEdit={onEdit} onDelete={onDelete} />
                                     </td>
                                 )}
                             </tr>
@@ -81,7 +81,7 @@ export default function ContactList({contacts, showAdded, onEdit}) {
                         <li key={contact.id} className="flex min-w-0 flex-col gap-3 p-4 sm:rounded-xl sm:border sm:border-line">
                             <div className="flex items-start justify-between gap-2">
                                 <Person contact={contact} withCompany />
-                                {onEdit && <RowActions contact={contact} onEdit={onEdit} />}
+                                {onEdit && <RowActions contact={contact} onEdit={onEdit} onDelete={onDelete} />}
                             </div>
                             <div className="flex flex-col gap-1 text-[13.5px]">
                                 <Lines items={contactEmails(contact)} />
@@ -104,9 +104,9 @@ export default function ContactList({contacts, showAdded, onEdit}) {
 }
 
 // Buttons that change one contact (admins only)
-function RowActions({ contact, onEdit }) {
+function RowActions({ contact, onEdit, onDelete }) {
     return (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1">
             <button
                 type="button"
                 onClick={() => onEdit(contact)}
@@ -115,6 +115,15 @@ function RowActions({ contact, onEdit }) {
                 className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg"
             >
                 <Icon name="edit" className="size-4" />
+            </button>
+            <button
+                type="button"
+                onClick={() => onDelete(contact)}
+                aria-label={`Delete ${contact.name}`}
+                title="Delete"
+                className="grid size-8 place-items-center rounded-lg text-muted hover:bg-err-soft hover:text-err-text"
+            >
+                <Icon name="trash" className="size-4" />
             </button>
         </div>
     )

@@ -69,6 +69,9 @@ export function getErrorMessage(error){
     // HTTPException(detail="...") from Fastapi 
     if (typeof detail === 'string') return detail
 
+    // HTTPException(detail={"message": "...", ...})
+    if (typeof detail?.message === 'string') return detail.message
+
     // 422 validation error: [{ loc: ['body','email'], msg: 'value is not a valid email address'}]
     if (Array.isArray(detail) && detail.length > 0){
         const {loc, msg} = detail[0]

@@ -5,7 +5,9 @@ import Alert from "../components/Alert";
 import Button from "../components/Button";
 import ContactForm from "../components/ContactForm";
 import ContactList, { contactEmails, contactPhones } from "../components/ContactList";
+import DeleteContact from "../components/DeleteContact";
 import Icon from "../components/Icon";
+import ImportContacts from "../components/ImportContacts";
 import Input from '../components/Input'
 import Modal from "../components/Modal";
 import Pagination, { PAGE_SIZES } from "../components/Pagination";
@@ -13,6 +15,9 @@ import Select from "../components/Select";
 import useApi from "../hooks/useApi";
 
 const formatNumber = (n) => n.toLocaleString('en-IN')
+
+// "1 new contact" / "3 new contacts"
+const count = (n, words) => `${formatNumber(n)} ${words}${n === 1 ? '' : 's'}`
 
 export default function ContactsPage() {
     const { user } = useAuth()
@@ -26,6 +31,8 @@ export default function ContactsPage() {
     
     // The add / edit popup: null = closed, { contact: null } = add, { contact } = edit that contact
     const [formFor, setFormFor] = useState(null)
+    const [deleting, setDeleting] = useState(null) // the contact waiting for "Delete?" to be confirmed
+    const [importing, setImporting] = useState(false)
     const [notice, setNotice] = useState('')
 
     // Newest first (a bigger id was added later)
@@ -93,6 +100,30 @@ export default function ContactsPage() {
         contacts.reload()
     }
 
+    function openDelete(contact) {
+        setNotice('')
+        setDeleting(contact)
+    }
+
+    function handleDeleted() {
+        setNotice(`${deleting.name} deleted.`)
+        setDeleting(null)
+        contacts.reload()
+    }
+
+    function openImport() {
+        setNotice('')
+        setImporting(true)
+    }
+
+    // Runs as soon as an upload saved something, while the summary is still open
+    function handleImported(result) {
+        setNotice(
+            `Import done: ${count(result.created_contacts, 'new contact')} added, ${formatNumber(result.existing_contacts)} already saved.`,
+        )
+        contacts.reload()
+    }
+
     return(
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
@@ -104,10 +135,18 @@ export default function ContactsPage() {
                         : 'Recruiters you can email.'}
                     </p>
                 </div>
-                <Button onClick={() => openForm()}>
-                    <Icon name="plus" />
-                    Add contact
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    {isAdmin && (
+                        <Button variant="secondary" onClick={openImport}>
+                            <Icon name="upload" />
+                            Import
+                        </Button>
+                    )}
+                    <Button onClick={() => openForm()}>
+                        <Icon name="plus" />
+                        Add contact
+                    </Button>
+                </div>
             </div>
 
             <Alert tone="success">{notice}</Alert>
@@ -173,7 +212,12 @@ export default function ContactsPage() {
                             {formatNumber(matches.length)} of {formatNumber(all.length)} contacts match.
                         </p>
                         )}
-                        <ContactList contacts={pageItems} showAdded={isAdmin} onEdit={isAdmin ? openForm : undefined} />
+                        <ContactList
+                            contacts={pageItems}
+                            showAdded={isAdmin}
+                            onEdit={isAdmin ? openForm : undefined}
+                            onDelete={isAdmin ? openDelete : undefined}
+                        />
                         <Pagination
                         page={currentPage}
                         pageSize={pageSize}
@@ -195,7 +239,19 @@ export default function ContactsPage() {
             >
                 <ContactForm contact={formFor?.contact} onSaved={handleSaved} onCancel={() => setFormFor(null)} />
             </Modal>
+            
+            <Modal open={Boolean(deleting)} onClose={() => setDeleting(null)} title="Delete this contact?">
+                <DeleteContact contact={deleting} onDeleted={handleDeleted} onCancel={() => setDeleting(null)} />
+            </Modal>
 
+            <Modal
+                open={importing}
+                onClose={() => setImporting(false)}
+                title="Import contacts"
+                description="Add many recruiters at once from an Excel or CSV file."
+            >
+                <ImportContacts onImported={handleImported} onClose={() => setImporting(false)} />
+            </Modal>
         </div>
     )
 }
