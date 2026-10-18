@@ -171,6 +171,13 @@ def extract_phones(
         if not item:
             continue
 
+        # A number Excel stored as 9876543210.0
+        item = re.sub(
+            r"\.0+$",
+            "",
+            item,
+        )
+
         phone = re.sub(
             r"[^\d+]",
             "",
@@ -232,6 +239,30 @@ def validate_excel_columns(
 # Read uploaded file
 # ============================================================
 
+def find_header_row(
+    raw: pd.DataFrame,
+) -> int:
+    """
+    Position of the first row (among the top 10) that has both a
+    "Name" and an "Email" cell. Falls back to the first row, so a
+    file without them still gets "Missing required columns".
+    """
+
+    for position in range(min(10, len(raw))):
+
+        cells = {
+            str(value).strip()
+            for value in raw.iloc[position]
+            if pd.notna(value)
+        }
+
+        if {"Name", "Email"} <= cells:
+            return position
+
+    return 0
+
+
+
 def read_upload_file(
     contents: bytes,
     filename: str,
@@ -249,11 +280,12 @@ def read_upload_file(
 
         if extension == ".csv":
 
-            df = pd.read_csv(
+            raw = pd.read_csv(
                 io.BytesIO(contents),
                 sep=None,
                 engine="python",
-                header=0,
+                header=None,
+                dtype=str,
             )
 
         # ----------------------------------------------------
@@ -262,11 +294,12 @@ def read_upload_file(
 
         elif extension == ".xlsb":
 
-            df = pd.read_excel(
+            raw = pd.read_excel(
                 io.BytesIO(contents),
                 engine="pyxlsb",
                 sheet_name=0,
-                header=1,
+                header=None,
+                dtype=str,
             )
 
         # ----------------------------------------------------
@@ -275,11 +308,12 @@ def read_upload_file(
 
         elif extension == ".ods":
 
-            df = pd.read_excel(
+            raw = pd.read_excel(
                 io.BytesIO(contents),
                 engine="odf",
                 sheet_name=0,
-                header=1,
+                header=None,
+                dtype=str,
             )
 
         # ----------------------------------------------------
@@ -288,10 +322,11 @@ def read_upload_file(
 
         else:
 
-            df = pd.read_excel(
+            raw = pd.read_excel(
                 io.BytesIO(contents),
                 sheet_name=0,
-                header=1,
+                header=None,
+                dtype=str,
             )
 
     except Exception as exc:
@@ -300,20 +335,45 @@ def read_upload_file(
             f"Unable to read {extension} file: {exc}"
         )
 
+    # ----------------------------------------------------
+    # Header row: wherever "Name" and "Email" are, so a sheet
+    # may start with a title row (or not)
+    # ----------------------------------------------------
+
+    header_row = find_header_row(
+        raw
+    )
+
+    df = raw.iloc[header_row + 1:]
+
+    # Blank header cells get a placeholder name, so two blank
+    # headers never collide
+    df.columns = [
+        str(value).strip()
+        if pd.notna(value) and str(value).strip()
+        else f"Column {position + 1}"
+        for position, value in enumerate(
+            raw.iloc[header_row]
+        )
+    ]
+
+    # Keep pandas' row numbers in step with the spreadsheet:
+    # build_contacts_from_excel() reports `index + 2` as the row.
+    df.index = range(
+        header_row,
+        header_row + len(df),
+    )
+
+    df = df.dropna(
+        how="all"
+    )
+
     if df.empty:
 
         raise ValueError(
             "Uploaded file contains no data."
         )
 
-    df = df.dropna(
-        how="all"
-    )
-
-    df.columns = [
-        str(column).strip()
-        for column in df.columns
-    ]
 
     validate_excel_columns(
         df
@@ -421,8 +481,8 @@ def build_contacts_from_excel(
 
     for index, row in df.iterrows():
 
-        # Your current Excel uses header=1,
-        # therefore actual Excel row is index + 2.
+        # read_upload_file() numbers the rows so that
+        # index + 2 is the row number in the spreadsheet.
         excel_row_number = index + 2
 
         # ----------------------------------------------------
