@@ -672,7 +672,8 @@ async def find_existing_contact(
     db: AsyncSession,
 ):
 
-    # Search using any email belonging to the contact.
+    # Search using any email belonging to the contact first,
+    # then any phone (see the loop below).
 
     for email in contact.emails:
 
@@ -721,6 +722,58 @@ async def find_existing_contact(
         if existing_contact:
 
             return existing_contact
+    
+    # Nobody has these emails: try the phones, the same way the
+    # "Add contact" form does (find_existing_contact_by_email_or_phone
+    # in repositories.py), so a recruiter sent again with a different
+    # email is not saved twice.
+
+    for phone in contact.phones:
+
+        # ----------------------------------------------------
+        # Search normalized phone table
+        # ----------------------------------------------------
+
+        result = await db.execute(
+            select(HRContactPhone).where(
+                HRContactPhone.phone == phone
+            )
+        )
+
+        existing_phone = result.scalar_one_or_none()
+
+        if existing_phone:
+
+            # Same reason as for emails: query the contact by id
+            # instead of touching the relationship.
+
+            result = await db.execute(
+                select(HRContactsV2).where(
+                    HRContactsV2.id == existing_phone.contact_id
+                )
+            )
+
+            return result.scalar_one_or_none()
+
+        # ----------------------------------------------------
+        # Search old HRContactsV2.phone column
+        # ----------------------------------------------------
+
+        # This column is not unique, so take the first match
+        # instead of expecting exactly one.
+
+        result = await db.execute(
+            select(HRContactsV2).where(
+                HRContactsV2.phone == phone
+            )
+        )
+
+        existing_contact = result.scalars().first()
+
+        if existing_contact:
+
+            return existing_contact
+
 
     return None
 
