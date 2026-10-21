@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-// Holds { user, status, login, loginWithTokens. logout } - filled in by <AuthProvider>
+// Holds { user, status, login, loginWithTokens. logout, updateUser } - filled in by <AuthProvider>
 export const AuthContext = createContext(null)
 
 // Use inside any component: const {user, logout } = useAuth()

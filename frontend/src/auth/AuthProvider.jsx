@@ -77,7 +77,12 @@ export default function AuthProvider({ children }) {
         if (refreshToken) authApi.logout(refreshToken).catch(() => {})
     }
 
-    const value = { user, status, login, loginWithTokens, logout };
+    // After the user edits their profile, show the new name everywhere without reloading
+    function updateUser(me) {
+        setUser(me)
+    }
+
+    const value = { user, status, login, loginWithTokens, logout, updateUser };
 
     // Development only; lets you call auth.login(...) / auth.logout() from the browser console
     useEffect(() => {

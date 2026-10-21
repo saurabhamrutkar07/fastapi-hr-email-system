@@ -9,6 +9,7 @@ import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
 import OAuthSuccessPage from './pages/auth/OAuthSuccessPage'
 import DashboardPage from './pages/DashboardPage'
 import ContactsPage from './pages/ContactsPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -33,7 +34,7 @@ export default function App() {
           <Route path="history" element={<ComingSoon title="History" description="Every send attempt and the mail server's reply." />} />
           <Route path="templates" element={<ComingSoon title="Templates" description="Write once. Variables are filled in for each recruiter." />} />
           <Route path="resumes" element={<ComingSoon title="Resumes" description="The active version is attached to every email." />} />
-          <Route path="settings" element={<ComingSoon title="Settings" description="Your profile and the email account you send from." />} />
+          <Route path="settings" element={<SettingsPage />} />
 
           <Route element={<RequireAdmin />}>
             <Route path="admin/users" element={<ComingSoon title="Users" description="Manage roles and who can sign in." />} />
