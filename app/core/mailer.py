@@ -15,6 +15,34 @@ import mimetypes
 import os
 from app.core.config import SMTP_SERVER, SMTP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD
 
+def _login(server:smtplib.SMTP, email_address: str, email_password: str) -> None:
+    """
+    server.login() that reports a rejected password as such. Gmail answers 
+    a wrong password with "535... not accepted" and then hangs up, so
+    smtplib's  retry with its next login method fails with 
+    SMTPServerDisconnected insted of SMTPAuthenticationError.  
+    """
+    try:
+        server.login(email_address,email_password)
+    except smtplib.SMTPServerDisconnected as exc:
+        raise smtplib.SMTPAuthenticationError(
+            535, b"Username and password not accepted"
+        ) from exc 
+
+def check_smtp_login(
+        smtp_server : str,
+        smtp_port : int,
+        email_address : str, 
+        email_password : str 
+) -> None:
+    """
+    Connects  and logs in without sending anything, to find out early 
+    whether the mail server accepts these details. Raises the smtplib
+    error (e.g. SMTPAuthenticationError for a wrong App password).
+    """
+    with smtplib.SMTP(smtp_server, smtp_port,timeout=15) as server:
+        server.starttls()
+        _login(server,email_address, email_password)
 
 def send_email(
     to_email: str,
@@ -90,6 +118,6 @@ def send_email(
     # 3. Establish SMTP connection, upgrade to TLS, authenticate, and send message
     with smtplib.SMTP(smtp_server, smtp_port) as server:
         server.starttls()  # Secure connection using Transport Layer Security (TLS)
-        server.login(email_address, email_password)  # Authenticate with credentials
+        _login(server,email_address, email_password)  # Authenticate with credentials
         server.send_message(msg)  # Transmit message payload
 

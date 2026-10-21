@@ -6,7 +6,7 @@ from typing import List
 from app.database.database import get_db 
 from app.core.security import get_current_user,require_admin
 from app.models.models import User
-from app.schemas.users import UserResponse, UserRoleUpdateRequest, UserStatusUpdateRequest
+from app.schemas.users import UserResponse, UserProfileUpdateRequest ,UserRoleUpdateRequest, UserStatusUpdateRequest
 
 router = APIRouter()
 
@@ -19,6 +19,21 @@ async def get_my_profile(
     """
     Returns the currently logges-in user's own profile
     """
+    return current_user
+
+@router.patch("/me",response_model=UserResponse)
+async def update_my_profile(
+    payload : UserProfileUpdateRequest,
+    current_user : User = Depends(get_current_user),
+    db : AsyncSession = Depends(get_db),
+):
+    """
+    Update the logged-in user's own name and mobile number.
+    """
+    current_user.name = payload.name 
+    current_user.mobile = payload.mobile
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 @router.get("/", response_model=List[UserResponse])
