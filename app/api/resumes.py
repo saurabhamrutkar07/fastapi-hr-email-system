@@ -12,6 +12,25 @@ from app.schemas.resume import ResumeResponse
 
 router = APIRouter()
 
+MAX_RESUME_BYTES = 5 * 1024 * 1024  # 5  MB ; Gmail refuses attachments over 25 MB 
+VIEW_LINK_SECONDS = 15 * 60
+
+
+async def get_own_resume(db:AsyncSession, user_id : int , resume_id : int) -> UserResume:
+    """
+    The user's own resume with this id, or 404 (also for someone else's).
+    """
+    result = await db.execute(
+        select(UserResume).where(
+            UserResume.id == resume_id,
+            UserResume.user_id == user_id
+        )
+    )
+    resume = result.scalar_one_or_none()
+    if resume is None:
+        raise HTTPException(status_code= status.HTTP_404_NOT_FOUND,detail="Resume not found.")
+
+    return resume
 
 @router.post("/upload", response_model=ResumeResponse,status_code=status.HTTP_201_CREATED)
 async def upload_resume(
@@ -38,6 +57,20 @@ async def upload_resume(
     new_version = max_version + 1 
 
     file_bytes = await file.read()
+
+    # The browser's content type can be wrong, real pdfs start eith "%PDF"
+    if not file_bytes.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This file isn't a valid PDF."
+        )
+
+    if len(file_bytes) > MAX_RESUME_BYTES:
+        raise HTTPException(
+            status_code= status.HTTP_400_BAD_REQUEST,
+            detail= "Resume must be 5 MB or smaller."
+        )
+    
     key = f"resumes/{current_user.id}/v{new_version}.pdf"
     s3_storage.upload_file(file_bytes,key,content_type="application/pdf")
 
@@ -143,3 +176,44 @@ async def set_active_resume(
         uploaded_at=resume.uploaded_at.isoformat(),
     )
 
+
+@router.get("/{resume_id}/view-url")
+async def get_resume_view_url(
+    resume_id: int, 
+    current_user : User = Depends(get_current_user),
+    db : AsyncSession = Depends(get_db)
+):
+    """
+    A private link that opens this resume's PDF for 15 minutes. The 
+    bucket stays private; the link only works for this one file.
+    """
+
+    resume = await get_own_resume(db,current_user.id,resume_id)
+    url = s3_storage.generate_presigned_url(resume.file_path, expires_in=VIEW_LINK_SECONDS)
+    return {"url": url, "expires_in": VIEW_LINK_SECONDS}
+
+
+@router.delete("/{resume_id}")
+async def delete_resume(
+    resume_id : int, 
+    current_user : User = Depends(get_current_user),
+    db : AsyncSession = Depends(get_db)
+):
+    """
+    Deletes one resume version from s3 and the database. The active 
+    version can't be deleted: the user makes another one active first, 
+    so emails always have a resume to attach.
+    """
+
+    resume = await get_own_resume(db, current_user.id ,resume_id)
+
+    if resume.is_active:
+        raise HTTPException(
+            status_code= status.HTTP_400_BAD_REQUEST,
+            detail= "This is your active resume. Make another version active before deleting it."
+        )
+
+    s3_storage.delete_file(resume.file_path)
+    await db.delete(resume)
+    await db.commit()
+    return {"message": "Resume deleted."}

@@ -16,4 +16,20 @@ class EmailTemplateResponse(BaseModel):
     is_default : bool 
 
 
+class EmailTemplateUpdate(BaseSchema):
+    name : str = Field(..., min_length=1, max_length=100)
+    subject : str | None = Field(None, max_length=255)
+    content : str = Field(..., min_length=1, max_length=10000)
+
+
+class EmailTemplatePreviewRequest(BaseSchema):
+    subject : str | None = Field(None, max_length=255)
+    content : str = Field(...,min_length=1,max_length=10000)
+
+
+class EmailTemplatePreviewResponse(BaseModel):
+    subject: str 
+    body: str 
+
+
 
