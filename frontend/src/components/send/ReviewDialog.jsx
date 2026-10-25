@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getErrorMessage } from '../../api/client'
+import { resumesApi } from '../../api/resumes'
 import { sendApi } from '../../api/sending'
 import Alert from '../Alert'
 import Button from '../Button'
@@ -32,6 +33,19 @@ export default function ReviewDialog({ recipients, templateId, profileId, testMo
       cancelled = true
     }
   }, [contact.id, templateId, profileId])
+
+  // Open the tab right away (browsers block tabs opened after a wait), then point it at the active resume
+  async function viewResume() {
+    const tab = window.open('', '_blank')
+    try {
+        const active = (await resumesApi.list()).find((r)=> r.is_active)
+        const { url } = await resumesApi.viewUrl(active.id)
+        tab.location.href = url 
+    }catch(err){
+        tab.close()
+        setError(getErrorMessage(err))
+    }
+  }
 
   async function handleSend() {
     setError('')
@@ -69,7 +83,15 @@ export default function ReviewDialog({ recipients, templateId, profileId, testMo
           error={preview.error}
           loading={preview.loading}
           to={<>{contact.name}{contact.company ? `, ${contact.company}` : ''} <span className="text-muted">&lt;{contact.email}&gt;</span></>}
-          attachment={preview.data ? `📎 ${preview.data.attachment_name}` : '…'}
+                    attachment={
+            preview.data ? (
+              <button type="button" onClick={viewResume} title="Open your resume in a new tab" className="text-left font-semibold text-link hover:underline">
+                📎 {preview.data.attachment_name}
+              </button>
+            ) : (
+              '…'
+            )
+          }
         />
         <p className="text-[12.5px] text-muted">Each recruiter gets their own email; nobody sees the others.</p>
       </div>
