@@ -1,8 +1,12 @@
+import { useAuth } from '../auth/context'
 import GmailSection from '../components/settings/GmailSection'
 import PasswordSection from '../components/settings/PasswordSection'
 import ProfileSection from '../components/settings/ProfileSection'
+import SenderProfilesSection from '../components/settings/SenderProfilesSection'
+import TestModeSection from '../components/settings/TestModeSection'
 
 export default function SettingsPage() {
+  const { user } = useAuth()
   return (
     <div className="flex max-w-3xl flex-col gap-5">
       <div>
@@ -11,8 +15,10 @@ export default function SettingsPage() {
       </div>
 
       <GmailSection />
+      <SenderProfilesSection/>
       <ProfileSection />
       <PasswordSection />
+      {user.role === 'admin' && <TestModeSection/>}
     </div>
   )
 }

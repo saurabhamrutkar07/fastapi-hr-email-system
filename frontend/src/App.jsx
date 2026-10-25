@@ -13,6 +13,7 @@ import SettingsPage from './pages/SettingsPage'
 import TemplatesPage from './pages/TemplatesPage'
 import TemplateEditorPage from './pages/TemplateEditorPage'
 import ResumesPage from './pages/ResumesPage'
+import SendPage from './pages/SendPage'
 
 export default function App() {
   return (
@@ -33,7 +34,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="contacts" element={<ContactsPage />} />
-          <Route path="send" element={<ComingSoon title="Send Email" description="Send a cold email with your resume attached." />} />
+          <Route path="send" element={<SendPage />} />
           <Route path="history" element={<ComingSoon title="History" description="Every send attempt and the mail server's reply." />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="templates/new" element={<TemplateEditorPage />} />

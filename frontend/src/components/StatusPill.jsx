@@ -1,9 +1,10 @@
 const STATUSES = {
   SUCCESS: { label: 'Sent', tone: 'bg-ok-soft text-ok-text', dot: 'bg-ok' },
   FAILED: { label: 'Failed', tone: 'bg-err-soft text-err-text', dot: 'bg-err' },
+  PENDING: { label: 'Sending…', tone: 'bg-warn-soft text-warn-text', dot: 'bg-warn animate-pulse' },
 }
 
-// Coloured label for an email's status from the backend ("SUCCESS" / "FAILED")
+// Coloured label for an email's status from the backend ("SUCCESS" / "FAILED" / "PENDING")
 export default function StatusPill({ status }) {
   const s = STATUSES[status] ?? { label: status, tone: 'bg-surface-2 text-muted', dot: 'bg-muted' }
 
