@@ -25,6 +25,8 @@ from app.api.smtp_credentials import router as smtp_credentials_router
 from app.api.email_templates import router as email_tmeplate_router
 from app.api.resumes import router as resume_rouer
 from app.api.users import router as users_router
+from app.api.sender_profiles import router as sender_profiles_router
+from app.api.test_mode import router as test_mode_router
 # ============================================================
 # Database
 # ============================================================
@@ -235,4 +237,16 @@ app.include_router(
     users_router,
     prefix="/users",
     tags=["Users"]
+)
+
+app.include_router(
+    sender_profiles_router,
+    prefix="/sender-profiles",
+    tags=["Sender Details"],
+)
+
+app.include_router(
+    test_mode_router,
+    prefix="/test-mode",
+    tags=["Test Mode (admin)"],
 )

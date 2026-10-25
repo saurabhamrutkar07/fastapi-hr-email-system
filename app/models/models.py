@@ -32,6 +32,7 @@ from sqlalchemy import (
     String,
     DateTime,
     Boolean,
+    Float,
     ForeignKey,
 )
 from sqlalchemy.orm import relationship
@@ -499,3 +500,42 @@ class RevokedRefreshToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String, unique=True, nullable=False, index=True)
     revoked_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserSenderProfile(Base):
+    """
+    Pre-User Sender Details.
+
+    A set of "about me" details a user sends cold emails with: the job 
+    they wantm years of experience, skills and LinkedIn. User can keep
+    several (e.g. one per kind of role) and pick one when sending;
+     `is_default` is the one picked first. `skills` is stored 
+     comma-separated ("Python, FaspAPI"). 
+    """
+    __tablename__ = "user_sender_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id",ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    job_position = Column(String,nullable=False)
+    experience_years = Column(Float,nullable=False)
+    skills = Column(String,nullable=False)
+    linkedin_url = Column(String,nullable=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True),server_default=func.now())
+
+
+class AdminTestMode(Base):
+    """
+    An Admin's test Switch.
+
+    While `enabled`, that admin's sends only may only go to `test_emails`
+    (comma-seoarated), so features can be tried without eamiling real 
+    recruiters. Regular users never have a row and are never affected.
+    """
+    __tablename__ = "admin_test_modes"
+
+    user_id = Column(Integer,ForeignKey("users.id",ondelete="CASCADE"),primary_key=True)
+    enabled = Column(Boolean,nullable=False, default=True)
+    test_emails = Column(String, nullable=False,default="")
+    updated_at = Column(DateTime(timezone=True),server_default=func.now(), onupdate=func.now())

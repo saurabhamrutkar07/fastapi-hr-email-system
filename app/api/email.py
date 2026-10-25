@@ -27,6 +27,8 @@ from typing import List
 # These classes validate incoming request data and structure outgoing responses.
 from app.core.encryption import decrypt_value
 from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest, EmailTransactionResponse, EmailStatsResponse
+from app.schemas.sending import EmailPreviewRequest, EmailPreviewResponse, EmailStatusItem, MAX_RECIPIENTS, SendEmailsRequest, SendEmailsResponse
+from app.services.send_service import email_statuses, last_sent, preview_email, queue_emails
 from app.services.cold_email_service import send_email_to_individual, get_user_smtp_config,get_recruiters_for_sending,send_cold_emails_background,get_user_default_template, get_user_active_resume
 from app.database.repositories import get_transaction_by_request_id, list_email_transactions, get_email_stats
 from app.core.security import get_current_user
@@ -298,4 +300,52 @@ async def get_email_stats_summary(
 
 
 
+# ---------------------------------------------------------------------------
+# Send Page: preview, send to chosen contacts, follow the results
+# ---------------------------------------------------------------------------
 
+
+@router.post("/preview", response_model=EmailPreviewResponse)
+async def preview_email_for_contact(
+    payload: EmailPreviewRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The exact email one contact would get with this template and sender
+    details: subject, body and the attachment's file name. Nothing is sent.
+    """
+    return await preview_email(current_user, payload.contact_id, payload.template_id, payload.sender_profile_id)
+
+
+@router.post("/send", response_model=SendEmailsResponse, status_code=status.HTTP_202_ACCEPTED)
+async def send_emails_to_contacts(
+    payload: SendEmailsRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sends the template to up to 50 chosen contacts, one email each, in the
+    background. Everything is checked first, so a missing Gmail, resume,
+    template or contact fails right away with nothing sent. Follow the
+    returned request ids with /email/status.
+    """
+    return await queue_emails(current_user, payload, background_tasks)
+
+
+@router.get("/status", response_model=List[EmailStatusItem])
+async def get_email_statuses(
+    request_ids: str = Query(..., max_length=2000, description="Request ids from /email/send, comma-separated"),
+    current_user: User = Depends(get_current_user),
+):
+    """How each of these emails went: PENDING, SUCCESS or FAILED (with the reason)."""
+    ids = [i.strip() for i in request_ids.split(",") if i.strip()][:MAX_RECIPIENTS]
+    return await email_statuses(current_user.id, ids)
+
+
+@router.get("/last-sent")
+async def get_last_sent(current_user: User = Depends(get_current_user)) -> dict[str, str]:
+    """
+    When the user last emailed each address successfully, so the Send
+    page can say "Emailed on 20 Oct": { "hr@company.com": "2026-10-20T..." }
+    """
+    return await last_sent(current_user.id)
