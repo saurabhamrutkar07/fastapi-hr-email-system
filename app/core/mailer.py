@@ -53,7 +53,8 @@ def send_email(
     smtp_server: str | None = None,
     smtp_port : int | None = None,
     email_address : str | None = None,
-    email_password : str | None = None
+    email_password : str | None = None,
+    message_id : str | None = None
 ):
     """
     Constructs and dispatches an email message over SMTP with TLS encryption.
@@ -77,6 +78,9 @@ def send_email(
     msg["From"] = email_address
     msg["To"] = to_email
     msg["Subject"] = subject
+    # Our own id for this email, so a reply (In-Reply-To: <this id>) can be matched to it
+    if message_id:
+        msg["Message-ID"] = message_id
     msg.set_content(body)
 
     # 2. Process file attachments if provided

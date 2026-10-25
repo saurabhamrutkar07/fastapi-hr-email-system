@@ -34,6 +34,7 @@ from sqlalchemy import (
     Boolean,
     Float,
     ForeignKey,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -539,3 +540,26 @@ class AdminTestMode(Base):
     enabled = Column(Boolean,nullable=False, default=True)
     test_emails = Column(String, nullable=False,default="")
     updated_at = Column(DateTime(timezone=True),server_default=func.now(), onupdate=func.now())
+
+
+class EmailSendDetail(Base):
+    """
+        What one email from the Send page said, saved when it is sent so History
+        keeps showing it after the contact, template or resume changes.
+        One row per email_transactions row (same request_id).
+
+        message_id is the email's Message-ID header. A recruiter's reply carries
+        it in In-Reply-To, so replies can be matched to this email later.
+    """
+
+    __tablename__ = "email_send_details"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(String, ForeignKey("email_transactions.request_id", ondelete="CASCADE"), unique=True, nullable=False,index=True)
+    contact_name = Column(String, nullable=False)
+    company = Column(String, nullable=True)
+    subject = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    template_name = Column(String,nullable=True)
+    resume_version = Column(Integer,nullable=True)
+    message_id = Column(String, nullable=True, index=True)

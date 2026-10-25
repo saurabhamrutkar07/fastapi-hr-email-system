@@ -6,7 +6,7 @@ Sends cold emails to contacts the user picked on the Send page, filled in
 with one of their sender profiles and templates:
 1. Previewing the exact email one contact will get.
 2. Queuing emails to the chosen contacts (sent in the background).
-3. Reporting how each queued email went, and who was emailed before.
+3. Reporting how each queued email went, and who was emailed before. Each sent email's content is saved too, for the History page.
 4. An admin's test mode, which only allows sends to their test emails.
 
 The older /email/send-cold and /email/send-to-hr flows live in
@@ -17,6 +17,7 @@ cold_email_service.py and are unchanged.
 import asyncio
 import re
 import uuid 
+from email.utils import make_msgid
 
 from fastapi import BackgroundTasks,HTTPException, status
 from sqlalchemy import func, select
@@ -24,8 +25,7 @@ from sqlalchemy import func, select
 from app.core.encryption import decrypt_value
 from app.core.mailer import send_email
 from app.database.database import AsyncSessionLocal
-from app.database.repositories import create_email_transaction
-from app.models.models import AdminTestMode, EmailTransaction,HRContactsV2,User,UserEmailTemplate,UserSenderProfile
+from app.models.models import AdminTestMode, EmailSendDetail, EmailTransaction,HRContactsV2,User,UserEmailTemplate,UserResume,UserSenderProfile
 from app.schemas.sending import SendEmailsRequest
 from app.services.cold_email_service import(
     classify_email_exception,
@@ -143,6 +143,14 @@ async def preview_email(user:User, contact_id:int, template_id:int, sender_profi
         "attachment_name": attachment_name(user)
     }
 
+async def active_resume_version(user_id: int) -> int | None:
+    """The version number of the resume that goes with this user's emails, e.g. 2 for "v2"."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(UserResume.version_number).where(UserResume.user_id == user_id, UserResume.is_active == True)
+        )
+        return result.scalars().first()
+
 
 async def queue_emails(user:User, payload: SendEmailsRequest, background_tasks: BackgroundTasks) -> dict:
     """
@@ -154,6 +162,8 @@ async def queue_emails(user:User, payload: SendEmailsRequest, background_tasks: 
     allowed = await allowed_test_emails(user)
     smtp_credential = await get_user_smtp_config(user.id)
     resume_bytes = await get_user_active_resume(user.id)
+    resume_version = await active_resume_version(user.id)
+
 
     async with AsyncSessionLocal() as session:
         template = await get_owned(session, UserEmailTemplate, payload.template_id, user.id, "Template")
@@ -170,6 +180,8 @@ async def queue_emails(user:User, payload: SendEmailsRequest, background_tasks: 
             )
 
     jobs = []
+    # Message-IDs look like <...@gmail.com>, after the address the emails come from
+    domain = smtp_credential.email_address.split("@")[-1]
     for contact in contacts:
         subject, body = render_email(template, build_context(user, profile,contact))
         jobs.append({
@@ -177,6 +189,9 @@ async def queue_emails(user:User, payload: SendEmailsRequest, background_tasks: 
             "contact": contact,
             "subject": subject,
             "body": body,
+            "template_name": template.name,
+            "resume_version": resume_version,
+            "message_id": make_msgid(domain=domain),
         })
 
     background_tasks.add_task(
@@ -229,27 +244,42 @@ async def send_jobs(
                 smtp_server=smtp_server,
                 smtp_port=smtp_port,
                 email_address=email_address,
-                email_password=email_password,      
+                email_password=email_password,
+                message_id=job["message_id"]      
             )
             log_email(to_email,"SUCCESS")
-            await create_email_transaction(
-                request_id=job["request_id"],
-                recipient_email=to_email,
-                status="SUCCESS",
-                response_details="Email sent successfully via SMTP",
-                user_id=user_id,
-            )
+            await record_outcome(user_id, job, "SUCCESS", None, "Email sent successfully via SMTP")
         except Exception as exc:
             error_code, error_details = classify_email_exception(exc)
             log_email(to_email,"FAILED", error_details)
-            await create_email_transaction(
-                request_id=job["request_id"],
-                recipient_email=to_email,
-                status="FAILED",
-                error_code=error_code,
-                response_details=error_details,
-                user_id=user_id,
-            )
+            await record_outcome(user_id, job, "FAILED", error_code, error_details)
+
+
+async def record_outcome(user_id: int, job: dict, status: str, error_code: str | None, response_details: str) -> None:
+    """Saves how one email went (email_transactions) and what it said (email_send_details)."""
+    contact = job["contact"]
+    async with AsyncSessionLocal() as session:
+        session.add(EmailTransaction(
+            request_id=job["request_id"],
+            recipient_email=contact.email,
+            status=status,
+            error_code=error_code,
+            response_details=response_details,
+            user_id=user_id,
+        ))
+        # The details row points at the transaction, so the transaction is written first
+        await session.flush()
+        session.add(EmailSendDetail(
+            request_id=job["request_id"],
+            contact_name=contact.name,
+            company=contact.company,
+            subject=job["subject"],
+            body=job["body"],
+            template_name=job["template_name"],
+            resume_version=job["resume_version"],
+            message_id=job["message_id"],
+        ))
+        await session.commit()
 
 
 async def email_statuses(user_id:int, request_ids: list[str])-> list[dict]:

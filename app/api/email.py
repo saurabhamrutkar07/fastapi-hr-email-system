@@ -22,13 +22,15 @@ Security:
 """
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
-from typing import List
+from typing import List, Literal, Optional
 # Request/Response Pydantic schemas.
 # These classes validate incoming request data and structure outgoing responses.
 from app.core.encryption import decrypt_value
 from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest, EmailTransactionResponse, EmailStatsResponse
 from app.schemas.sending import EmailPreviewRequest, EmailPreviewResponse, EmailStatusItem, MAX_RECIPIENTS, SendEmailsRequest, SendEmailsResponse
 from app.services.send_service import email_statuses, last_sent, preview_email, queue_emails
+from app.schemas.history import HistoryDetail, HistoryPage
+from app.services.history_service import get_history_item, list_history
 from app.services.cold_email_service import send_email_to_individual, get_user_smtp_config,get_recruiters_for_sending,send_cold_emails_background,get_user_default_template, get_user_active_resume
 from app.database.repositories import get_transaction_by_request_id, list_email_transactions, get_email_stats
 from app.core.security import get_current_user
@@ -229,7 +231,7 @@ async def get_email_transaction(request_id: str, curret_user: User = Depends(get
 
 
 @router.get("/transactions", response_model=List[EmailTransactionResponse])
-async def get_email_transactions_list(limit: int = 50, offset: int = 0,current_user: User = Depends(get_current_user)):
+async def get_email_transactions_list(limit: int = Query(50, ge=1, le=100), offset: int = Query(0,ge=0),current_user: User = Depends(get_current_user)):
     """
     Retrieve recent email transactions with pagination.
 
@@ -349,3 +351,33 @@ async def get_last_sent(current_user: User = Depends(get_current_user)) -> dict[
     page can say "Emailed on 20 Oct": { "hr@company.com": "2026-10-20T..." }
     """
     return await last_sent(current_user.id)
+
+
+
+
+# ============================================================
+# History
+# ============================================================
+
+@router.get("/history", response_model=HistoryPage)
+async def get_email_history(
+    status_filter: Optional[Literal["SUCCESS", "FAILED"]] = Query(None, alias="status"),
+    q: str = Query("", max_length=100, description="Words in the recipient, company or subject"),
+    days: Optional[int] = Query(None, ge=1, le=365, description="Only the last N days"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    One page of sent emails, newest first, and how many match in total.
+
+    Example:
+        /email/history?status=FAILED&q=zoho&days=30&limit=25&offset=0
+    """
+    return await list_history(current_user, status_filter, q.strip(), days, limit, offset)
+
+
+@router.get("/history/{request_id}", response_model=HistoryDetail)
+async def get_email_history_item(request_id: str, current_user: User = Depends(get_current_user)):
+    """One sent email with what it said, the template and resume version used."""
+    return await get_history_item(current_user, request_id)
