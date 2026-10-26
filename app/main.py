@@ -27,11 +27,7 @@ from app.api.resumes import router as resume_rouer
 from app.api.users import router as users_router
 from app.api.sender_profiles import router as sender_profiles_router
 from app.api.test_mode import router as test_mode_router
-# ============================================================
-# Database
-# ============================================================
 
-from app.database.database import create_tables
 
 # ============================================================
 # Logger
@@ -53,7 +49,9 @@ async def lifespan(app: FastAPI):
     FastAPI Lifespan Manager.
 
     Startup:
-        Initializes missing database tables.
+        Only logs. Database tables are created and changed by
+        migrations: run `alembic upgrade head` before starting the app.
+
 
     Shutdown:
         Performs application shutdown logging.
@@ -63,16 +61,7 @@ async def lifespan(app: FastAPI):
         "Application setup initiated"
     )
 
-    # --------------------------------------------------------
-    # Initialize database
-    #
-    # `create_tables()` only creates missing tables -- it is not
-    # the per-request DB session dependency (that's `get_db()`,
-    # used via `Depends()` inside individual routers).
-    # --------------------------------------------------------
-
-    await create_tables()
-
+    
     logger.info(
         "Application setup initiated successfully"
     )

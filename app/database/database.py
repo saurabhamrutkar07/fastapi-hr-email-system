@@ -7,12 +7,12 @@ Exposes:
 - `engine`: Async database engine connection pool.
 - `AsyncSessionLocal`: Factory for creating per-request async database sessions.
 - `Base`: Declarative Base class for all ORM models.
-- `create_tables()`: Startup-only helper that creates missing tables.
 - `get_db()`: FastAPI dependency that yields one AsyncSession per request.
 
+Tables are created and changed by Alembic migrations (migrations/ folder):
+run `alembic upgrade head` after pulling new code, before starting the app.
+
 Flow for a junior developer:
-    App startup (main.py lifespan)
-        -> create_tables() runs ONCE, creates any missing tables.
 
     Every incoming request that needs the DB
         -> FastAPI calls get_db()
@@ -21,11 +21,7 @@ Flow for a junior developer:
         -> when the route finishes (success or error), get_db() resumes
            and closes the session.
 
-`create_tables()` and `get_db()` used to be a single function called
-`init_db()`. That was a bug: main.py awaited it expecting table creation,
-while routes used it via `Depends()` expecting a per-request session --
-two incompatible jobs sharing one name. They are now split so each caller
-gets the function it actually needs.
+
 ===============================================================================
 """
 
@@ -76,19 +72,7 @@ AsyncSessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 
-async def create_tables():
-    """
-    Startup-only helper: creates any tables that don't exist yet.
 
-    Called ONCE from main.py's lifespan handler -- never used as a
-    request dependency.
-
-    `Base.metadata.create_all` is a synchronous SQLAlchemy Core call; it
-    has no async version. `conn.run_sync(...)` bridges this by handing
-    it a real sync-style Connection borrowed from the async engine.
-    """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db():
