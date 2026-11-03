@@ -15,6 +15,7 @@ import TemplateEditorPage from './pages/TemplateEditorPage'
 import ResumesPage from './pages/ResumesPage'
 import SendPage from './pages/SendPage'
 import HistoryPage from './pages/HistoryPage'
+import AdminUsersPage from './pages/AdminUsersPage'
 
 export default function App() {
   return (
@@ -44,7 +45,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
 
           <Route element={<RequireAdmin />}>
-            <Route path="admin/users" element={<ComingSoon title="Users" description="Manage roles and who can sign in." />} />
+            <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
 
           <Route path="*" element={<ComingSoon title="Page not found" description="Check the address or pick a page from the menu." />} />

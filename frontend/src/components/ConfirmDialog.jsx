@@ -6,8 +6,9 @@ import Button from './Button'
 /*
     The body and buttons of a "Are you sure?" popup; put it inside <Modal>.
     onConfirm returns a promise (the backend call); errors are shown here and the popup stays open.
+    For changes that can be undone, pass a different `note` (or null) and variant="primary". 
 */
-export default function ConfirmDialog({ message, confirmLabel, onConfirm, onCancel }) {
+export default function ConfirmDialog({ message, confirmLabel, onConfirm, onCancel, note = "This can't be undone", variant = 'danger' }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -27,13 +28,13 @@ export default function ConfirmDialog({ message, confirmLabel, onConfirm, onCanc
       <div className="flex flex-col gap-3 px-5 py-4">
         <Alert>{error}</Alert>
         <p>{message}</p>
-        <p className="text-[13px] text-muted">This can’t be undone.</p>
+        {note && <p className="text-[13px] text-muted">{note}</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-line px-5 py-4">
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="button" variant="danger" loading={busy} onClick={handleConfirm}>
+        <Button type="button" variant={variant} loading={busy} onClick={handleConfirm}>
           {confirmLabel}
         </Button>
       </div>

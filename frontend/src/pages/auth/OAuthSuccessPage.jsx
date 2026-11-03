@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/context'
 import Alert from '../../components/Alert'
 
 // The backend's Google callback sends the browser to /oauth-success#token=...&refresh=...
+// (or #error=blocked when an admin has blocked the account)
 
 function readTokensFromHash() {
     const params = new URLSearchParams(window.location.hash.slice(1))
@@ -17,7 +18,14 @@ export default function OAuthSuccessPage() {
     const { loginWithTokens } = useAuth()
     // Read once, before the effect below wipes the address bar
     const [tokens] = useState(readTokensFromHash)
-    const [error, setError] = useState(tokens ? '' : "Google sign-in didn't finish. Please try again.")
+    const [error, setError] = useState(() => {
+        if (tokens) return ''
+        if (new URLSearchParams(window.location.hash.slice(1)).get('error') === 'blocked') {
+            return 'This account has been blocked. Contact the admin if you think this is a mistake.'
+        }
+        return "Google sign-in didn't finish. Please try again."
+    })
+
 
     useEffect(()=> {
       // Remove the tokens from the address bar and browser history straight away
