@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 
 from app.database.database import get_db
 from app.models.models import User,OTP, RevokedRefreshToken
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token, ensure_not_blocked
 from app.core.mailer import send_email
 from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL
 from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,RefreshTokenRequest,ForgotPasswordRequest, ResetPasswordRequest
@@ -140,7 +140,9 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
             user.is_active = True
         user.google_id = google_id
         await db.commit()
-
+    if user.blocked_at is not None:
+        # The sign-in page shows the reason instead of signing them in 
+        return RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#error=blocked")
     token_data = {"sub": str(user.id), "role": user.role}
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
@@ -309,6 +311,9 @@ async def login(paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
             detail= "Invalid email or password."
         )
 
+    # Only after the password matched, so nobody learns an account is blocked by guessing
+    ensure_not_blocked(user)
+
     token_data = {"sub": str(user.id), "role": user.role}
     return TokenResponse(
         access_token = create_access_token(token_data),
@@ -353,6 +358,8 @@ async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends
             detail= "User not found or inactive."
         )
 
+    ensure_not_blocked(user, status.HTTP_401_UNAUTHORIZED)
+
     token_data = {"sub": str(user.id), "role": user.role}
 
     return TokenResponse(
@@ -373,7 +380,7 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
 
     user = result.scalar_one_or_none()
 
-    if user is not None and user.is_active:
+    if user is not None and user.is_active and user.blocked_at is None:
         await generate_and_send_otp(user,purpose="password_reset",db=db)
 
     return {"message": "If an account with this email exists, a password reset OTP has been sent."}

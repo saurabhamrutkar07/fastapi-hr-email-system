@@ -94,6 +94,9 @@ class User(Base):
     google_id = Column(String,unique=True, nullable=True)
     auth_provider = Column(String,nullable=False,default="local")
     created_at = Column(DateTime(timezone=True),server_default=func.now())
+    # Set when an admin blocks the account (is_active only means signup finished)
+    blocked_at = Column(DateTime(timezone=True), nullable=True)
+    blocked_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     email_transactions = relationship("EmailTransaction",back_populates="user")
 

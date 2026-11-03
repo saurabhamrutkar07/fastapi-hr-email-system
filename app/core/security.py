@@ -140,8 +140,23 @@ async def get_current_user(
             status_code= status.HTTP_401_UNAUTHORIZED,
             detail= "User not found or inactive."
         )
+    # 401, so the app tries a token refresh, which also refuses, and signs them out 
+    ensure_not_blocked(user,status.HTTP_401_UNAUTHORIZED)
 
     return user
+
+BLCOKED_MESSAGE = "This account has been blocked. Contact the admin if you think this is a mistake."
+
+
+def ensure_not_blocked(user:User, status_code:int = status.HTTP_403_FORBIDDEN) -> None:
+    """
+    Stops a blocked user at every way in: each request, login, Google
+    sign-in and token refresh. Blocking only sets users.blocked_at, so
+    is_active keeps meaning "finished signing up" and signing up again 
+    can't undo a block.
+    """
+    if user.blocked_at is not None:
+        raise HTTPException(status_code=status_code, detail=BLCOKED_MESSAGE)
 
 def require_admin(current_user: User = Depends(get_current_user))-> User:
     """

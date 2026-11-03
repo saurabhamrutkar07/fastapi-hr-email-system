@@ -27,6 +27,22 @@ class UserRoleUpdateRequest(BaseSchema):
     role: Literal["user","admin"]
 
 
-class UserStatusUpdateRequest(BaseSchema):
-    is_active : bool 
+class UserBlockRequest(BaseSchema):
+    blocked: bool 
+
+
+class AdminUserItem(BaseModel):
+    """One row of the admin's User page."""
+    id: int 
+    name: str 
+    email: str 
+    role: str
+    # "pending" = signed up but never finished (no verified email or password yet)
+    status: Literal["active", "blocked", "pending"]
+    auth_provider: str 
+    created_at : datetime
+    blocked_at : datetime | None = None 
+    blocked_by_name: str | None = None 
+    emails_sent : int = 0 
+    last_sent_at : datetime | None = None 
 

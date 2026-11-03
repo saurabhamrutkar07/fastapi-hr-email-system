@@ -6,7 +6,8 @@ from typing import List
 from app.database.database import get_db 
 from app.core.security import get_current_user,require_admin
 from app.models.models import User
-from app.schemas.users import UserResponse, UserProfileUpdateRequest ,UserRoleUpdateRequest, UserStatusUpdateRequest
+from app.schemas.users import UserResponse, UserProfileUpdateRequest ,UserRoleUpdateRequest, AdminUserItem, UserBlockRequest
+from app.services.admin_users_service import change_role,list_users,set_blocked
 
 router = APIRouter()
 
@@ -36,67 +37,43 @@ async def update_my_profile(
     await db.refresh(current_user)
     return current_user
 
-@router.get("/", response_model=List[UserResponse])
+
+@router.get("/",  response_model=List[AdminUserItem])
 async def list_all_users(
-    current_user : User = Depends(require_admin),db: AsyncSession = Depends(get_db)
+    current_user : User = Depends(require_admin), db: AsyncSession = Depends(get_db)
 ):
-
     """
-    Admin-only: list every registered user.
+    Admin-Only: every user, newest first, with their status (active,
+    blocked or pending signup) and how many emails they've sent.
     """
-    result = await db.execute(select(User))
-    return result.scalars().all()
 
+    return await list_users(db)
 
-@router.patch("/{user_id}/role",response_model=UserResponse)
+@router.patch("/{user_id}/role", response_model=AdminUserItem)
 async def update_user_role(
-    user_id : int,
-    payload : UserRoleUpdateRequest,
+    user_id : int, 
+    payload: UserRoleUpdateRequest,
     admin : User = Depends(require_admin),
-    db :AsyncSession = Depends(get_db)
+    db : AsyncSession = Depends(get_db)
 ):
     """
-    Admin-only: changes a user's role (e.g. promote "user" to "admin")
+    Admin-only: changes a user's role (e.g. promote "admin").
+    Not for your own account, and the last admin stays an admin.
     """
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail= "User not found"
-        )
-
-    user.role = payload.role
-    await db.commit()
-    await db.refresh(user)
-    return user
+    return await change_role(db, admin, user_id, payload.role)
 
 
-@router.patch("/{user_id}/status", response_model=UserResponse)
-async def update_user_status(
-    user_id: int,
-    payload: UserStatusUpdateRequest,
+@router.patch("/{user_id}/block", response_model=AdminUserItem)
+async def update_user_block(
+    user_id : int, 
+    payload: UserBlockRequest,
     admin : User = Depends(require_admin),
-    db : AsyncSession = Depends(get_db) 
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Admin - only : enables or disables a user account. A disabled 
-    (is_active = False) user cannot log in 
+    Admin-only: blocks or unblocks a user. A blocked user is signed out
+    on their next request and can't sign in again, with any method.
     """
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    return await set_blocked(db, admin, user_id, payload.blocked)
 
-    if user is None:
-        raise HTTPException(
-            status_code= status.HTTP_404_NOT_FOUND,
-            detail= "User Not found"
-        )
-
-    user.is_active = payload.is_active
-    await db.commit()
-    await db.refresh(user)
-
-    return user
 
