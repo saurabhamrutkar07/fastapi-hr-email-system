@@ -45,12 +45,30 @@ load_dotenv()
 # asyncpg driver is doing the actual network I/O.
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Create Asynchronous SQLAlchemy Engine
-# `echo=True` logs SQL statements for debugging
-# `pool_pre_ping=True` tests connections before usage to prevent stale connection errors
+def env_int(name:str, default:int)-> int:
+    """ A whole number from .env, or the default when it isn't set.""" 
+    return int(os.getenv(name,default))
+
+# Create Asynchronous SQLAlchemy Engine with a connection pool.
+#
+# Each request borrows one connection for its database work and gives it 
+# back when its session closes, so these numbers are about requests
+# running at the same moment, not about how many users exist.
+# Every worker process has its own pool: workers x (pool size + overflow)
+# must stay well under Postgres's max_connections (100 by default). 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,
+    # print every sql statement; handy locally, too noisy in production 
+    echo=os.getenv("DB_ECHO","false").lower() == "true",
+    # Connections kept open and ready
+    pool_size=env_int("DB_POOL_SIZE",5),
+    # Extra connections allowed during a burst, closed again afterwards 
+    max_overflow=env_int("DB_MAX_OVERFLOW",5),
+    # Seconds a request waits for a free connection before failing
+    pool_timeout = env_int("DB_POOL_TIMEOUT",10),
+    # Replace connections older than this, before servers drop idle ones
+    pool_recycle=env_int("DB_POOL_RECYCLE",1800),
+    # Check a connection still works before handing it out
     pool_pre_ping=True
 )
 

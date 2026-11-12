@@ -124,6 +124,14 @@ Create a `.env` file in the project root:
 ```env
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
 
+
+# Optional database pool settings (defaults shown)
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT=10
+DB_POOL_RECYCLE=1800
+DB_ECHO=false
+
 ADMIN_KEY=your_api_key_here
 
 SMTP_EMAIL=your_email@gmail.com
