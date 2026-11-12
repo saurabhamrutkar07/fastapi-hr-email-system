@@ -5,8 +5,10 @@ Application Entry Point (main.py)
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import FRONTEND_URL
+from app.core.rate_limit import limiter,rate_limit_exceeded
 
 # ============================================================
 # API Routers
@@ -105,6 +107,9 @@ app.add_middleware(
 
 )
 
+# Rate limits on login, OTP and email-sending endpoints (app/core/rate_limit.py)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded,rate_limit_exceeded)
 
 # ============================================================
 # Router Registrations

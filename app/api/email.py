@@ -21,7 +21,7 @@ Security:
     the `key-secret` header.
 """
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, Request
 from typing import List, Literal, Optional
 # Request/Response Pydantic schemas.
 # These classes validate incoming request data and structure outgoing responses.
@@ -34,6 +34,8 @@ from app.services.history_service import get_history_item, list_history
 from app.services.cold_email_service import send_email_to_individual, get_user_smtp_config,get_recruiters_for_sending,send_cold_emails_background,get_user_default_template, get_user_active_resume
 from app.database.repositories import get_transaction_by_request_id, list_email_transactions, get_email_stats
 from app.core.security import get_current_user
+from app.core import rate_limit
+from app.core.rate_limit import limiter
 from app.models.models import User
 from common.Logger import Logger
 
@@ -320,7 +322,9 @@ async def preview_email_for_contact(
 
 
 @router.post("/send", response_model=SendEmailsResponse, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(rate_limit.SEND_EMAILS)
 async def send_emails_to_contacts(
+    request: Request,
     payload: SendEmailsRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),

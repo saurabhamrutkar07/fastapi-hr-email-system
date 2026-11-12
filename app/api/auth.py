@@ -1,7 +1,7 @@
 import asyncio
 import secrets 
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException,status,Depends
+from fastapi import APIRouter, HTTPException,status,Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
@@ -11,6 +11,8 @@ from app.database.database import get_db
 from app.models.models import User,OTP, RevokedRefreshToken
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token, ensure_not_blocked
 from app.core.mailer import send_email
+from app.core import rate_limit
+from app.core.rate_limit import limiter
 from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL
 from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,RefreshTokenRequest,ForgotPasswordRequest, ResetPasswordRequest
 
@@ -151,7 +153,8 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
     return RedirectResponse(url=redirect_url)
 
 @router.post("/signup", response_model = SignupResponse)
-async def signup(payload: SignupRequest,db: AsyncSession=Depends(get_db)):
+@limiter.limit(rate_limit.SIGNUP)
+async def signup(request:Request, payload: SignupRequest,db: AsyncSession=Depends(get_db)):
     """
     Creates a new user in a pending state and emails them a 
     verification OTP. Account is unusable untill verify-otp and 
@@ -195,7 +198,8 @@ async def signup(payload: SignupRequest,db: AsyncSession=Depends(get_db)):
     )
 
 @router.post("/verify-otp")
-async def verify_otp(payload:VerifyOTPRequest, db:AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.VERIFY_OTP)
+async def verify_otp(request: Request,payload:VerifyOTPRequest, db:AsyncSession = Depends(get_db)):
     """
     Verifies the otp emails during signup. On success, makes the 
     user's email as verified -- does NOT activate the account yet
@@ -254,7 +258,8 @@ async def verify_otp(payload:VerifyOTPRequest, db:AsyncSession = Depends(get_db)
         }
 
 @router.post("/set-password")
-async def set_password(payload:SetPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.SET_PASSWORD)
+async def set_password(request: Request,payload:SetPasswordRequest, db: AsyncSession = Depends(get_db)):
     """
       Final step of sign up -- sets the user's password and activated the account.
       Requires the signup_token returned by /auth.verify-otp, so only the person 
@@ -298,7 +303,8 @@ async def set_password(payload:SetPasswordRequest, db: AsyncSession = Depends(ge
     return {"message" : "Password set successfully. You can now log in."}
 
 @router.post("/login", response_model=TokenResponse)
-async def login(paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.LOGIN)
+async def login(request: Request,paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Verifies email + password and issues an access + refresh token pair.
     """
@@ -321,7 +327,8 @@ async def login(paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/refresh",response_model=TokenResponse)
-async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.REFRESH)
+async def refresh_token(request: Request ,payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     """
     Exchanges a valid refresh token for a new access token. The
     orignal refresh token is returned unchanged (not rotated).
@@ -368,7 +375,8 @@ async def refresh_token(payload: RefreshTokenRequest, db: AsyncSession = Depends
     )
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.FORGOT_PASSWORD)
+async def forgot_password(request: Request, payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """
     Sends a password-reset OTP if the email belongs to an active
     acconut. Always returns the same genereic message regardless --
@@ -386,7 +394,8 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
     return {"message": "If an account with this email exists, a password reset OTP has been sent."}
 
 @router.post("/reset-password")
-async def reset_password(payload:ResetPasswordRequest,db:AsyncSession = Depends(get_db)):
+@limiter.limit(rate_limit.RESET_PASSWORD)
+async def reset_password(request:Request,payload:ResetPasswordRequest,db:AsyncSession = Depends(get_db)):
     """
     Verifies  a pssword-reset OTP and sets a new password. Uses a 
     generic "invalid or expired OTP" error for every failure case

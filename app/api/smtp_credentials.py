@@ -1,7 +1,7 @@
 import asyncio
 import smtplib
 
-from fastapi import APIRouter, Depends, HTTPException,status
+from fastapi import APIRouter, Depends, HTTPException,status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,8 @@ from app.core.encryption import encrypt_value, decrypt_value
 from app.models.models import User, UserSMTPCredential
 from app.schemas.smtp_credentials import SMTPCredentialCreate, SMTPCredentialResponse
 from app.core.mailer import check_smtp_login, send_email
+from app.core import rate_limit
+from app.core.rate_limit import limiter
 
 router = APIRouter()
 
@@ -18,7 +20,9 @@ WRONG_LOGIN = "Gmail rejected this email address or App Password. Check both and
 UNREACHABLE = "Could not reach Gmail. Check your internet connection and try again."
 
 @router.post("/", response_model=SMTPCredentialResponse)
+@limiter.limit(rate_limit.SMTP_CHECK)
 async def save_smtp_credentials(
+     request: Request,
     payload : SMTPCredentialCreate,
     current_user : User = Depends(get_current_user),
     db : AsyncSession = Depends(get_db),
@@ -111,7 +115,9 @@ async def get_smtp_credentials(
         )
 
 @router.post('/test')
+@limiter.limit(rate_limit.SMTP_CHECK)
 async def send_test_email(
+     request: Request,
     current_user : User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
