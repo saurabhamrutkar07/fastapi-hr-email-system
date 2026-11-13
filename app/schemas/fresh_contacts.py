@@ -9,10 +9,10 @@ Defines data validation models for:
 ===============================================================================
 """
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
-from app.schemas.base import BaseSchema
+from app.schemas.base import BaseSchema, NormEmail
 
 
 class AddFreshContactRequest(BaseSchema):
@@ -26,8 +26,8 @@ class AddFreshContactRequest(BaseSchema):
     primary one.
     """
     name: str = Field(..., min_length=2,max_length=100, description="Name of HR or recruiter")
-    email: EmailStr = Field(..., description="Primary work email address")
-    additional_emails: List[EmailStr] = Field(
+    email: NormEmail = Field(..., description="Primary work email address")
+    additional_emails: List[NormEmail] = Field(
         default_factory=list,
         description="Any extra email addresses for this contact",
     )

@@ -28,6 +28,12 @@ router = APIRouter()
 REFRESH_COOKIE = "refresh_token"
 GOOGLE_CODE_SECONDS = 60 
 
+# Google sign-in sends a random "state" to Google and keeps the same value in
+# this cookie. The callback accepts only a state that matches the cookie, so a 
+# sign-in someone else started (a link they send you) can't log you into their account.
+OAUTH_STATE_COOKIE = "oauth_state"
+OAUTH_STATE_SECONDS = 600 
+
 def issue_tokens(user:User, response: Response)-> TokenResponse:
     """Access token in the body; refresh token in the httpOnly cookie."""
     token_data = {"sub": str(user.id), "role":user.role}
@@ -86,6 +92,7 @@ async def google_login():
     approves, and Google redirects back to /auth/google/callback with
     an authorization code.
     """
+    state = secrets.token_urlsafe(32)
     google_auth_url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={GOOGLE_CLIENT_ID}"
@@ -93,18 +100,38 @@ async def google_login():
         "&response_type=code"
         "&scope=openid%20email%20profile"
         "&access_type=offline"
+        f"&state={state}"
     )
-    return RedirectResponse(url=google_auth_url)
+    response = RedirectResponse(url=google_auth_url)
+    response.set_cookie(
+        OAUTH_STATE_COOKIE, state,
+        max_age=OAUTH_STATE_SECONDS,
+        httponly=True, secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/auth/google",
+    )
+    return response
+
+def google_redirect(fragment: str) -> RedirectResponse:
+    """Back to the frontend after Google sign-in; the state cookie is used up."""
+    response = RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#{fragment}")
+    response.delete_cookie(OAUTH_STATE_COOKIE, path="/auth/google", secure=COOKIE_SECURE, httponly=True,samesite="lax")
+    return response
 
 @router.get("/google/callback")
-async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
+async def google_callback(request: Request, code: str | None = None, state: str | None = None, db:AsyncSession = Depends(get_db)):
     """
     Handles Google's redirect after the user approves consent. Exchanges
     the authorization code for tokens, fetches the user's Google profile,
     finds or creates the matching local user, and redirects to the
     frontend with our own access + referesh tokens in the URL fragment (#).
     """
-
+    # No code: the user pressed Cancel on Google's screen. Wrong or missing state:
+    # an old link, or a sign-in that was started on another browser.
+    expected_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not code or not state or not expected_state or not secrets.compare_digest(state.encode(), expected_state.encode()):
+        return google_redirect("error=failed")
+    
     import httpx # circular import
 
     async with httpx.AsyncClient() as client:
@@ -149,7 +176,7 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
         )
     
     google_id = google_user["sub"]
-    email = google_user["email"]
+    email = google_user["email"].strip().lower()
     name = google_user.get("name",email)
 
     result = await db.execute(select(User).where(User.email == email))
@@ -182,7 +209,7 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
         await db.commit()
     if user.blocked_at is not None:
         # The sign-in page shows the reason instead of signing them in 
-        return RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#error=blocked")
+        return google_redirect("error=blocked")
 
     # Hand the frontend a one-time code, not tokens: URLs end up in browser
     # history and logs. It trades the code at /auth/google/exchange.
@@ -193,7 +220,7 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=GOOGLE_CODE_SECONDS),
     ))
     await db.commit()
-    return RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#code={code}")
+    return google_redirect(f"code={code}")
 
 @router.post("/google/exchange", response_model=TokenResponse)
 @limiter.limit(rate_limit.GOOGLE_EXCHANGE)

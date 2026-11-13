@@ -6,7 +6,7 @@ from pydantic import (
     Field,
     field_validator,
 )
-from app.schemas.base import BaseSchema
+from app.schemas.base import BaseSchema, NormEmail
 
 
 class ExcelContact(BaseSchema):
@@ -17,7 +17,7 @@ class ExcelContact(BaseSchema):
 
     name: str = Field(max_length=100)
 
-    emails: list[EmailStr] = Field(
+    emails: list[NormEmail] = Field(
         default_factory=list
     )
 

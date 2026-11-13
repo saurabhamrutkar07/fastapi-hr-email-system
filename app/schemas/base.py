@@ -1,5 +1,9 @@
-from pydantic import BaseModel, ConfigDict
+from typing import Annotated
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr
 
+# An email address saved and compared in lowercase, so "HR@Zoho.com" and 
+# "hr@zoho.com" are the same person (one account, one contact)
+NormEmail = Annotated[EmailStr, AfterValidator(lambda v: v.strip().lower())]
 class BaseSchema(BaseModel):
     """
     Shared base for all request schemas -- strips leading/trailing

@@ -1,11 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field
-from app.schemas.base import BaseSchema
+from app.schemas.base import BaseSchema, NormEmail
 
 
 class SMTPCredentialCreate(BaseSchema):
     smtp_server : str = Field(default="smtp.gmail.com",max_length=255)
     smtp_port: int = Field(default=587)
-    email_address: EmailStr
+    email_address: NormEmail
     password : str = Field(..., min_length=1,max_length=128, description="Gmail App Password, not your real account password")
 
 
