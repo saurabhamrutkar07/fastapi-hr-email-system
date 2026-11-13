@@ -84,28 +84,50 @@ def render_cold_email(content: str,context: dict) -> str:
     return template.render(**context)
 
 
-def classify_email_exception(e: Exception) -> tuple[str,str]:
+def smtp_reason(e: Exception) -> str:
+    """The mail server's own words for an SMTP error, shortened."""
+    text = getattr(e, "smtp_error", b"") or str(e)
+    if isinstance(text, bytes):
+        text = text.decode(errors="replace")
+    return " ".join(text.split())[:200]
+
+
+def is_sending_limit(e: Exception) -> bool:
+    """Gmail's "daily sending limit exceeded" / "rate limited" answers."""
+    if not isinstance(e, smtplib.SMTPResponseException):
+        return False
+    reason = smtp_reason(e).lower()
+    return any(word in reason for word in ("limit", "quota", "rate"))
+
+
+def classify_email_exception(e: Exception) -> tuple[str, str]:
     """
-    Turns an SMTP/Python exception into (error_code, error_details):
-    CREDENTIALS_EXPIRED, RECIPENT_NOT_FOUND, ATTACHMENT_MISSING, 
-    CONNECTION_FAILED, SMTP_ERROR or UNKNOWN_ERROR.
+    Turns an exception from sending one email into (error_code, message).
+    The message is what the user sees on the Send and History pages: what
+    happened and what to do. The raw error is logged by the caller.
+
+    - CREDENTIALS_EXPIRED: Gmail rejected the App Password
+    - SENDING_LIMIT: Gmail's sending limit (daily or per-minute) is reached
+    - RECIPIENT_NOT_FOUND: the address was refused (may not exist)
+    - ATTACHMENT_MISSING: the resume couldn't be attached
+    - CONNECTION_FAILED: the mail server couldn't be reached / timed out
+    - SMTP_ERROR: any other refusal, with the server's reason
+    - UNKNOWN_ERROR: anything else
     """
     if isinstance(e, smtplib.SMTPAuthenticationError):
-        error_code = "CREDENTIALS_EXPIRED"
-        error_details = f"Authentication failed: {e.smtp_error.decode() if isinstance(e.smtp_error, bytes) else str(e)}"
-    elif isinstance(e, smtplib.SMTPRecipientsRefused):
-        error_code = "RECIPIENT_NOT_FOUND"
-        error_details = f"Recipient email invalid or refused: {str(e)}"
-    elif isinstance(e, FileNotFoundError):
-        error_code = "ATTACHMENT_MISSING"
-        error_details = str(e)
-    elif isinstance(e, (smtplib.SMTPServerDisconnected, TimeoutError, ConnectionError)):
-        error_code = "CONNECTION_FAILED"
-        error_details = f"SMTP connection failed: {str(e)}"
-    elif isinstance(e, smtplib.SMTPException):
-        error_code = "SMTP_ERROR"
-        error_details = str(e)
-    else:
-        error_code = "UNKNOWN_ERROR"
-        error_details = str(e)
-    return error_code, error_details
+        return "CREDENTIALS_EXPIRED", "Gmail didn't accept your App Password. Create a new one and save it on the Gmail settings page."
+    if isinstance(e, smtplib.SMTPRecipientsRefused):
+        return "RECIPIENT_NOT_FOUND", "The mail server refused this address. It may be mistyped or no longer exist."
+    if is_sending_limit(e):
+        return "SENDING_LIMIT", "Gmail's sending limit is reached. Try again later; the daily limit resets within 24 hours."
+    if isinstance(e, FileNotFoundError):
+        return "ATTACHMENT_MISSING", "Your resume couldn't be attached. Upload it again and retry."
+    if isinstance(e, (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError)):
+        return "CONNECTION_FAILED", "Couldn't reach the mail server. Try again in a few minutes."
+    # Before OSError: every smtplib error is also an OSError
+    if isinstance(e, smtplib.SMTPException):
+        return "SMTP_ERROR", f"The mail server didn't accept this email: {smtp_reason(e)}"
+    if isinstance(e, OSError):
+        # Timeouts, refused connections, DNS failures
+        return "CONNECTION_FAILED", "Couldn't reach the mail server. Try again in a few minutes."
+    return "UNKNOWN_ERROR", "Something went wrong while sending this email. Try again."

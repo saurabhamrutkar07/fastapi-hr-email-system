@@ -120,7 +120,9 @@ def send_email(
             )
 
     # 3. Establish SMTP connection, upgrade to TLS, authenticate, and send message
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
+    # timeout: a mail server that stops answering fails after 30s instead
+    # of holding this thread forever
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
         server.starttls()  # Secure connection using Transport Layer Security (TLS)
         _login(server,email_address, email_password)  # Authenticate with credentials
         server.send_message(msg)  # Transmit message payload

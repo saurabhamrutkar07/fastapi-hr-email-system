@@ -36,6 +36,9 @@ from app.services.cold_email_service import(
     render_cold_email,
 )
 from app.services.email_logger import log_email
+from common.Logger import Logger 
+
+logger = Logger.get_logger()
 
 
 def skills_list(profile: UserSenderProfile)-> list[str]:
@@ -231,11 +234,17 @@ async def send_jobs(
     """
     Runs after the response: sends each prepared email one after another
     and records the outcome under its request id. Never raises; a failed 
-    email is recorded as FAILED with the reason.
+    email is recorded as FAILED with the reason. After a failure that
+    would hit every email (wrong App Password, daily limit), the rest are
+    marked FAILED with the same reason instead of being tried.
     """
+    stop_reason = None
 
     for job in jobs:
         to_email = job["contact"].email
+        if stop_reason:
+            await record_outcome(user_id,job, "FAILED", *stop_reason)
+            continue
         try:
             await asyncio.to_thread(
                 send_email,
@@ -253,8 +262,15 @@ async def send_jobs(
             await record_outcome(user_id, job, "SUCCESS", None, "Email sent successfully via SMTP")
         except Exception as exc:
             error_code, error_details = classify_email_exception(exc)
-            log_email(to_email,"FAILED", error_details)
+            # The raw error goes to the logs; the user sees the clear message
+            logger.warning(f"Email to {to_email} failed: {error_code}: {exc!r}")
+            log_email(to_email,"FAILED", f"{error_code}: {exc!r}")
             await record_outcome(user_id, job, "FAILED", error_code, error_details)
+            if error_code in ACCOUNT_WIDE_ERRORS:
+                stop_reason = (error_code,error_details)
+
+# Failures that would repeat for every remaining email in the batch
+ACCOUNT_WIDE_ERRORS = {"CREDENTIALS_EXPIRED", "SENDING_LIMIT"}
 
 
 async def record_outcome(user_id: int, job: dict, status: str, error_code: str | None, response_details: str) -> None:

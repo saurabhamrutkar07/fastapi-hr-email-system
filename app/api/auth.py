@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import smtplib
 import secrets 
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException,status,Depends, Request,Response
@@ -15,6 +16,7 @@ from app.core.mailer import send_email
 from app.core import rate_limit
 from app.core.rate_limit import limiter
 from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL, REFRESH_TOKEN_EXPIRE_DAYS, COOKIE_SECURE
+from common.Logger import Logger
 from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,GoogleCodeRequest,ForgotPasswordRequest, ResetPasswordRequest
 
 router = APIRouter()
@@ -43,7 +45,12 @@ def hash_code(code:str)-> str:
     """One-time codes are stored as a SHA-256 hash, never in plain text."""
     return hashlib.sha256(code.encode()).hexdigest()
 
-async def generate_and_send_otp(user:User, purpose:str,db:AsyncSession)-> None:
+logger = Logger.get_logger()
+
+OTP_EMAIL_FAILED = "We couldn't send the verification email right now. Please try again in a few minutes."
+
+
+async def generate_and_send_otp(user:User, purpose:str,db:AsyncSession)-> bool:
     """
     Generates a 6 digit otp, stores its has against the user, and 
     emails the plain code to them. Used by both signup and 
@@ -58,13 +65,19 @@ async def generate_and_send_otp(user:User, purpose:str,db:AsyncSession)-> None:
     )
     db.add(otp_now)
     await db.commit()
-
-    await asyncio.to_thread(
-        send_email,
-        to_email=user.email,
-        subject = "Your verification code",
-        body = f"Your OTP is {otp_code}. It expires in {OTP_EXPIRE_MINUTES} minutes.",
-    )
+    # Return False if the email couldn't be sent; each caller decides what 
+    # the user is told (forgot-password must not reveal it, see there)
+    try : 
+        await asyncio.to_thread(
+            send_email,
+            to_email=user.email,
+            subject = "Your verification code",
+            body = f"Your OTP is {otp_code}. It expires in {OTP_EXPIRE_MINUTES} minutes.",
+        )
+    except (smtplib.SMTPException, OSError) as exc:
+        logger.error(f"OTP email ({purpose}) to user {user.id} could not be sent: {exc!r}")
+        return False
+    return True
 
 @router.get("/google/login")
 async def google_login():
@@ -235,7 +248,8 @@ async def signup(request:Request, payload: SignupRequest,db: AsyncSession=Depend
             )
         #Signup was started but never finished (OTP or signup token expired).
         #Send a fresh code insted of locking this email out forever.
-        await generate_and_send_otp(existing,purpose='signup',db=db)
+        if not await generate_and_send_otp(existing,purpose='signup',db=db):
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,detail=OTP_EMAIL_FAILED)
         return SignupResponse(
             user_id=existing.id,
             message="Signup initiated. Check your email for the verification OTP."
@@ -254,7 +268,9 @@ async def signup(request:Request, payload: SignupRequest,db: AsyncSession=Depend
     await db.commit()
     await db.refresh(user)
 
-    await generate_and_send_otp(user,purpose="signup",db=db)
+    if not await generate_and_send_otp(user,purpose="signup",db=db):
+        # The pending account stays; signing up again sends a fresh code 
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=OTP_EMAIL_FAILED) 
 
     return SignupResponse(
         user_id=user.id,
@@ -456,6 +472,8 @@ async def forgot_password(request: Request, payload: ForgotPasswordRequest, db: 
     user = result.scalar_one_or_none()
 
     if user is not None and user.is_active and user.blocked_at is None:
+        # A failure is only logged : an error here would tell a stranger
+        # this email has an account, which the same reply below hides
         await generate_and_send_otp(user,purpose="password_reset",db=db)
 
     return {"message": "If an account with this email exists, a password reset OTP has been sent."}

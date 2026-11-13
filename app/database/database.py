@@ -69,7 +69,10 @@ engine = create_async_engine(
     # Replace connections older than this, before servers drop idle ones
     pool_recycle=env_int("DB_POOL_RECYCLE",1800),
     # Check a connection still works before handing it out
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    # Postgres cancels any single query running longer than this, so a 
+    # stuck query can't hold a connection (and the request) forever 
+    connect_args={"server_settings": {"statement_timeout": str(env_int("DB_STATEMENT_TIMEOUT_MS",15000))}},
 )
 
 # Async Session Factory.
