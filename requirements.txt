@@ -1,19 +1,38 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-# psycopg2-binary
-asyncpg
-apscheduler
-python-dotenv
-python-multipart
-pydantic
-passlib[bcrypt]
-python-jose[cryptography]
-cryptography
-bcrypt<4.1
-boto3
-httpx
-pytest
-pytest-asyncio
-slowapi
-sentry-sdk[fastapi]
+# Exact versions, so CI, your laptop and the server all run the same code.
+# To upgrade a package: change its version here, run the tests, then commit.
+
+# Web app
+fastapi==0.109.0
+uvicorn[standard]==0.26.0
+python-multipart==0.0.21
+pydantic[email]==2.5.3
+python-dotenv==1.0.0
+slowapi==0.1.10
+sentry-sdk[fastapi]==2.75.0
+
+# Database
+sqlalchemy[asyncio]==2.0.41
+asyncpg==0.30.0
+alembic==1.16.4
+
+# Security
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.5.0
+cryptography==46.0.3
+
+# Email templates, S3, HTTP calls
+jinja2==3.1.6
+boto3==1.43.103
+httpx==0.26.0
+
+# Contact uploads (CSV / Excel / ODS)
+pandas==2.3.1
+openpyxl==3.1.5
+xlrd==2.0.2
+pyxlsb==1.0.10
+odfpy==1.4.1
+
+# Tests
+pytest==9.2.0
+pytest-asyncio==1.5.0
