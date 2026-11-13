@@ -97,7 +97,8 @@ class User(Base):
     # Set when an admin blocks the account (is_active only means signup finished)
     blocked_at = Column(DateTime(timezone=True), nullable=True)
     blocked_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-
+    # Tokens issued before this moment are refused (set by a password reset)
+    sessions_valid_after = Column(DateTime(timezone=True), nullable=True)
     email_transactions = relationship("EmailTransaction",back_populates="user")
 
 class OTP(Base):

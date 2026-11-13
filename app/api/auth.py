@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 
 from app.database.database import get_db
 from app.models.models import User,OTP, OAuthLoginCode,RevokedRefreshToken
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token, ensure_not_blocked
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token, ensure_not_blocked, ensure_token_still_valid
 from app.core.mailer import send_email
 from app.core import rate_limit
 from app.core.rate_limit import limiter
@@ -435,6 +435,7 @@ async def refresh_token(request: Request ,db: AsyncSession = Depends(get_db)):
         )
 
     ensure_not_blocked(user, status.HTTP_401_UNAUTHORIZED)
+    ensure_token_still_valid(user,decoded)
 
     token_data = {"sub": str(user.id), "role": user.role}
 
@@ -501,6 +502,9 @@ async def reset_password(request:Request,payload:ResetPasswordRequest,db:AsyncSe
 
     otp_row.is_used = True
     user.password_hash = hash_password(payload.new_password)
+    # Sign out every existing session: tokens issued before now stop working.
+    # Whole seconds, because a token's iat is in whole seconds.
+    user.sessions_valid_after = datetime.now(timezone.utc).replace(microsecond=0)
     await db.commit()
 
     return {"message": "Password reset successfully. You can now log in with your new password."}

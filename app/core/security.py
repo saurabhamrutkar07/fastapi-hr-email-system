@@ -2,7 +2,8 @@
 ===============================================================================
 API Security Dependency (security.py)
 ===============================================================================
-Password hashing, JWT tokens, and the dependencies that protect API routes: get_current_user (a valid access token), require_admin and ensure_not_blocked.
+Password hashing, JWT tokens, and the dependencies that protect API routes: 
+get_current_user (a valid access token), require_admin and ensure_not_blocked.
 ===============================================================================
 """
 import uuid
@@ -47,8 +48,10 @@ def create_access_token(data:dict)-> str:
     `data` should contain at least {"sub": str(user.id), "role": user.role}.
     """
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # iat = issued at, so a password reset can cancel older tokens
+    to_encode.update({"exp": expire, "iat": now, "type": "access"})
     return jwt.encode(to_encode, JWT_SECRET_KEY,algorithm=JWT_ALGORITHM)
 
 def create_refresh_token(data:dict) -> str:
@@ -56,9 +59,10 @@ def create_refresh_token(data:dict) -> str:
     Creates a long-lived JWT referesh token, used only to obtain a new 
     access token -- never accpeted directly by protected api routes
     """
+    now = datetime.now(timezone.utc)
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh","jti": str(uuid.uuid4())})
+    expire = now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire,"iat":now, "type": "refresh","jti": str(uuid.uuid4())})
     return jwt.encode(to_encode,JWT_SECRET_KEY,algorithm=JWT_ALGORITHM)
 
 def create_signup_token(user_id:int, email:str)-> str:
@@ -121,7 +125,7 @@ async def get_current_user(
         )
     # 401, so the app tries a token refresh, which also refuses, and signs them out 
     ensure_not_blocked(user,status.HTTP_401_UNAUTHORIZED)
-
+    ensure_token_still_valid(user,payload)
     return user
 
 BLOCKED_MESSAGE = "This account has been blocked. Contact the admin if you think this is a mistake."
@@ -136,6 +140,21 @@ def ensure_not_blocked(user:User, status_code:int = status.HTTP_403_FORBIDDEN) -
     """
     if user.blocked_at is not None:
         raise HTTPException(status_code=status_code, detail=BLOCKED_MESSAGE)
+
+SESSION_ENDED_MESSAGE = "Your password was changed. Please sign in again."
+
+
+def ensure_token_still_valid(user:User, payload:dict) -> None:
+    """
+    Refuses a token issued before the user's last password reset
+    (users.sessions_valid_after), so a reset signs out every device,
+    including anyone using a stolen token. Tokens made before `iat`
+    was added count as issued at 0, i.e. before any reset.
+    """
+    valid_after = user.sessions_valid_after
+    if valid_after is not None and payload.get("iat",0) < int(valid_after.timestamp()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail=SESSION_ENDED_MESSAGE)
+
 
 def require_admin(current_user: User = Depends(get_current_user))-> User:
     """
