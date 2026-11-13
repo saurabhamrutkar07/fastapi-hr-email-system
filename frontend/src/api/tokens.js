@@ -1,38 +1,27 @@
-// Login tokens are kept in localStorage so a page reload keeps you signed in.
-// Every access is wrapped in try/catch because storage can be blocked (private mode).
-const ACCESS_KEY = 'access_token'
-const REFRESH_KEY = 'refresh_token'
+// The access token lives only in memory, so a script injected into the page can't
+// read it from storage. A page reload forgets it, and AuthProvider asks /auth/refresh
+// for a new one. The refresh token is an httpOnly cookie that JavaScript never sees.
 
-function read(key){
-    try{
-        return localStorage.getItem(key)
-    }
-    catch{
-        return null
-    }
-}
+let accessToken = null 
 
 export const tokenStore = {
-    getAccess: () => read(ACCESS_KEY),
-    getRefresh: () => read(REFRESH_KEY),
+    getAccess: () => accessToken,
 
-    // `tokens` is the backend's TokenResponse : { access_token, refresh_token }
+    // `tokens` is the backend's TokenResponse: { access_token, token_type }
     save(tokens){
-        try{
-            localStorage.setItem(ACCESS_KEY,tokens.access_token)
-            localStorage.setItem(REFRESH_KEY,tokens.refresh_token)
-        }
-        catch{
-            // storage blocked - user stays signed in only until the tab closes
-        }
+        accessToken = tokens.access_token
     },
 
-    clear(){
-        try{
-            localStorage.removeItem(ACCESS_KEY)
-            localStorage.removeItem(REFRESH_KEY)
-        }catch{
-            // nothing stored, nothing to clear
-        }
+    clear() {
+        accessToken = null 
     },
+
+}
+
+// Older versions kept both tokens in localStorage; remove anything left behind 
+try{
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+}catch {
+    // storage blocked (private mode): nothing was saved there 
 }

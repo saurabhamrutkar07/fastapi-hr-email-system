@@ -25,12 +25,13 @@ class LoginRequest(BaseSchema):
     password: str = Field(min_length=8,max_length=128)
 
 class TokenResponse(BaseModel):
+    """The refresh token is not in the body: it is set as an httpOnly cookie."""
     access_token : str 
-    refresh_token : str 
     token_type : str = "bearer"
 
-class RefreshTokenRequest(BaseSchema):
-    refresh_token : str = Field(max_length=1024) 
+class GoogleCodeRequest(BaseSchema):
+    """The one-time code from /oauth-success#code=..."""
+    code : str = Field(max_length=128)
 
 class ForgotPasswordRequest(BaseSchema):
     email: EmailStr

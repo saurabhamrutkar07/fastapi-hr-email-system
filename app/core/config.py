@@ -100,6 +100,10 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", None)
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI",None)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+# The refresh-token cookie is sent only overv HTTPS. Browsers treat
+# http://localhost as secure too, so this can stay tue in development.
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+
 # Ensure application refuses to start if Google OAuth credentials are missing
 if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET or not GOOGLE_REDIRECT_URI:
     raise RuntimeError("Google OAuth credentials are not fully set. Please specify GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI in your .env file.")

@@ -566,3 +566,19 @@ class EmailSendDetail(Base):
     template_name = Column(String,nullable=True)
     resume_version = Column(Integer,nullable=True)
     message_id = Column(String, nullable=True, index=True)
+
+
+class OAuthLoginCode(Base):
+    """
+    One-time codes  handed to the frontend after Google sign-in, so tokens 
+    never appear in a URL. The frontend trades a code for tokens at 
+    /auth/google/exchange. Stored hashed; valid for 60 seconds, once.
+    """
+
+    __tablename__ = "oauth_login_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code_hash = Column(String, unique=True, nullable=False,index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)

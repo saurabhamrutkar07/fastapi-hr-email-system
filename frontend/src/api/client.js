@@ -3,8 +3,9 @@ import { tokenStore } from './tokens'
 
 const API_URL = import.meta.env.VITE_API_URL
 
-// every backend call goes through this instance
-export const api = axios.create({baseURL:API_URL,timeout:20000})
+// every backend call goes through this instance. withCredentials sends the
+// refresh-token cookie to /auth/... (the API is on another port in development)
+export const api = axios.create({baseURL:API_URL,timeout:20000, withCredentials: true})
 
 //1. Before each request: attach the access token if we have one
 api.interceptors.request.use((config) => {
@@ -17,13 +18,10 @@ api.interceptors.request.use((config) => {
 // they all wait for ONE refresh insted of sending three.
 let refreshPromise = null 
 
-
+// The refresh token is an httpOnly cookie the browser sends by itself 
 async function refreshAccessToken() {
-    const refreshToken = tokenStore.getRefresh()
-    if (!refreshToken) throw new Error('No refresh token')
-    
-    //Plain axios (not `api`) so this call can't loop back into the interceotir below
-    const {data} = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken })
+    // Plain axios (not `api`) so this call can't loop  back into the interceotir below
+    const {data} = await axios.post(`${API_URL}/auth/refresh`, null, {withCredentials:true })
     tokenStore.save(data)
     return data.access_token
 }

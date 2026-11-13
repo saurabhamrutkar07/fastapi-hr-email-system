@@ -35,6 +35,7 @@ VERIFY_OTP = "5/minute"
 RESET_PASSWORD = "5/minute"
 SET_PASSWORD = "5/minute"
 REFRESH = "30/minute"
+GOOGLE_EXCHANGE = "10/minute"
 # Each of these sends an email, so they could be used to spam someone
 SIGNUP = "3/minute;10/hour"
 FORGOT_PASSWORD = "3/minute;10/hour"

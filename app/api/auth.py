@@ -1,22 +1,47 @@
 import asyncio
+import hashlib
 import secrets 
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException,status,Depends, Request
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException,status,Depends, Request,Response
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
 from fastapi.responses import RedirectResponse
 
 from app.database.database import get_db
-from app.models.models import User,OTP, RevokedRefreshToken
+from app.models.models import User,OTP, OAuthLoginCode,RevokedRefreshToken
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token,create_signup_token,decode_token, ensure_not_blocked
 from app.core.mailer import send_email
 from app.core import rate_limit
 from app.core.rate_limit import limiter
-from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL
-from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,RefreshTokenRequest,ForgotPasswordRequest, ResetPasswordRequest
+from app.core.config import OTP_EXPIRE_MINUTES, OTP_MAX_ATTEMPTS, GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, FRONTEND_URL, REFRESH_TOKEN_EXPIRE_DAYS, COOKIE_SECURE
+from app.schemas.auth import SignupRequest, SignupResponse, VerifyOTPRequest,SetPasswordRequest,LoginRequest,TokenResponse,GoogleCodeRequest,ForgotPasswordRequest, ResetPasswordRequest
 
 router = APIRouter()
+
+# The refresh token lives in this httpOnly cookie, which JavaScript can't 
+# read, so a script injected into the page can't steal it. It is sent only 
+# # to /auth/... (path), only over HTTPS (secure) and not with requests that 
+# start on other sites (samesite).
+REFRESH_COOKIE = "refresh_token"
+GOOGLE_CODE_SECONDS = 60 
+
+def issue_tokens(user:User, response: Response)-> TokenResponse:
+    """Access token in the body; refresh token in the httpOnly cookie."""
+    token_data = {"sub": str(user.id), "role":user.role}
+    response.set_cookie(
+        REFRESH_COOKIE,
+        create_refresh_token(token_data),
+        max_age= REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True, secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/auth",
+    )
+    return TokenResponse(access_token=create_access_token(token_data))
+
+def hash_code(code:str)-> str:
+    """One-time codes are stored as a SHA-256 hash, never in plain text."""
+    return hashlib.sha256(code.encode()).hexdigest()
 
 async def generate_and_send_otp(user:User, purpose:str,db:AsyncSession)-> None:
     """
@@ -145,12 +170,51 @@ async def google_callback(code:str,db:AsyncSession = Depends(get_db)):
     if user.blocked_at is not None:
         # The sign-in page shows the reason instead of signing them in 
         return RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#error=blocked")
-    token_data = {"sub": str(user.id), "role": user.role}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
 
-    redirect_url = f"{FRONTEND_URL}/oauth-success#token={access_token}&refresh={refresh_token}"
-    return RedirectResponse(url=redirect_url)
+    # Hand the frontend a one-time code, not tokens: URLs end up in browser
+    # history and logs. It trades the code at /auth/google/exchange.
+    code = secrets.token_urlsafe(32)
+    db.add(OAuthLoginCode(
+        code_hash=hash_code(code),
+        user_id=user.id,
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=GOOGLE_CODE_SECONDS),
+    ))
+    await db.commit()
+    return RedirectResponse(url=f"{FRONTEND_URL}/oauth-success#code={code}")
+
+@router.post("/google/exchange", response_model=TokenResponse)
+@limiter.limit(rate_limit.GOOGLE_EXCHANGE)
+async def google_exchange(request: Request, response: Response, payload: GoogleCodeRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Trades the one-time code from Google sign-in for tokens. A code works 
+    once and only within 60 seconds of sign-in.
+    """
+    now = datetime.now(timezone.utc)
+    # One UPDATE both checks and uses the code, so two requests racing with 
+    # the same code can't both succeed
+    result = await db.execute(
+        update(OAuthLoginCode)
+        .where(
+            OAuthLoginCode.code_hash == hash_code(payload.code),
+            OAuthLoginCode.used_at.is_(None),
+            OAuthLoginCode.expires_at >  now, 
+        )
+        .values(used_at=now)
+        .returning(OAuthLoginCode.user_id)
+    )
+    user_id = result.scalar_one_or_none()
+    await db.commit()
+    if user_id is None:
+        raise HTTPException(
+            status_code= status.HTTP_400_BAD_REQUEST,
+            detail="This sign-in link has expired. Please sign in with Google again."
+        )
+
+    user = await db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code= status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
+    ensure_not_blocked(user)
+    return issue_tokens(user,response)
 
 @router.post("/signup", response_model = SignupResponse)
 @limiter.limit(rate_limit.SIGNUP)
@@ -304,9 +368,10 @@ async def set_password(request: Request,payload:SetPasswordRequest, db: AsyncSes
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(rate_limit.LOGIN)
-async def login(request: Request,paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(request: Request,response: Response,paylaod:LoginRequest, db: AsyncSession = Depends(get_db)):
     """
-    Verifies email + password and issues an access + refresh token pair.
+    Verifies email + password. Returns an access token and sets the
+    refresh token as an httpOnly cookie.
     """
     result = await db.execute(select(User).where(User.email == paylaod.email))
     user = result.scalar_one_or_none()
@@ -320,21 +385,25 @@ async def login(request: Request,paylaod:LoginRequest, db: AsyncSession = Depend
     # Only after the password matched, so nobody learns an account is blocked by guessing
     ensure_not_blocked(user)
 
-    token_data = {"sub": str(user.id), "role": user.role}
-    return TokenResponse(
-        access_token = create_access_token(token_data),
-        refresh_token = create_refresh_token(token_data),
-    )
+    
+    return issue_tokens(user,response)
 
 @router.post("/refresh",response_model=TokenResponse)
 @limiter.limit(rate_limit.REFRESH)
-async def refresh_token(request: Request ,payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
+async def refresh_token(request: Request ,db: AsyncSession = Depends(get_db)):
     """
-    Exchanges a valid refresh token for a new access token. The
-    orignal refresh token is returned unchanged (not rotated).
+    Exchanges the refresh-token cookie for a new access token. The cookie
+    itself stays as it is (not rotated). The frontend calls this on every
+    page load, since it keeps the access token only in memory.
     """
+    token = request.cookies.get(REFRESH_COOKIE)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not signed in."
+        )
     try :
-        decoded = decode_token(payload.refresh_token)
+        decoded = decode_token(token)
     except JWTError:
         raise HTTPException(
             status_code= status.HTTP_401_UNAUTHORIZED,
@@ -369,10 +438,7 @@ async def refresh_token(request: Request ,payload: RefreshTokenRequest, db: Asyn
 
     token_data = {"sub": str(user.id), "role": user.role}
 
-    return TokenResponse(
-        access_token= create_access_token(token_data),
-        refresh_token= payload.refresh_token
-    )
+    return TokenResponse(access_token= create_access_token(token_data))
 
 @router.post("/forgot-password")
 @limiter.limit(rate_limit.FORGOT_PASSWORD)
@@ -440,38 +506,27 @@ async def reset_password(request:Request,payload:ResetPasswordRequest,db:AsyncSe
     return {"message": "Password reset successfully. You can now log in with your new password."}
 
 @router.post("/logout")
-async def logout(payload:RefreshTokenRequest ,db:AsyncSession=Depends(get_db)):
+async def logout(request: Request,response: Response ,db:AsyncSession=Depends(get_db)):
     """
-    Revikes the given refresh token so it can no longer be used to
-    obtain new access tokens. The current access token (if any)
-    remains valid until its own short expiry -- this is the accepted
-    industry tradeoff for stateless JWTs (see /auth/refresh).
+    Revokes the refresh-token cookie so it can no longer be used to obtain 
+    new access tokens, and deletes the cookie. Safe to call when already 
+    signed out. The current access token (if any) remains valid until its 
+    own short expiry -- the accepted tradeoff for stateless JWTs.
     """
+    token = request.cookies.get(REFRESH_COOKIE)
     try:
-        decode = decode_token(payload.refresh_token)
+        decoded = decode_token(token) if token else {}
     except JWTError:
-        raise HTTPException(
-            status_code= status.HTTP_400_BAD_REQUEST,
-            detail= "invalid refresh token."
-        )
+        decoded = {}
 
-    if decode.get("type") != "refresh":
-        raise HTTPException(
-            status_code= status.HTTP_400_BAD_REQUEST,
-            detail="A refresh token is required to log out."
-        )
+    jti = decoded.get("jti")
+    if decoded.get("type") == "refresh" and jti:
+        already = await db.execute(select(RevokedRefreshToken).where(RevokedRefreshToken.jti == jti))
+        if already.scalar_one_or_none() is None:
+            db.add(RevokedRefreshToken(jti=jti))
+            await db.commit()
 
-    jti = decode.get("jti")
-    if jti is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This token predates logut support and connot be revoked"
-        )
-
-    revoked = RevokedRefreshToken(jti=jti)
-    db.add(revoked)
-    await db.commit()
-
+    response.delete_cookie(REFRESH_COOKIE,path="/auth", secure=COOKIE_SECURE, httponly=True, samesite="lax")
     return {"message": "Logged out successfully."}
     
 

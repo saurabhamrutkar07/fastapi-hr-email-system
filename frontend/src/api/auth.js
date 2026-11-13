@@ -13,8 +13,14 @@ export const authApi = {
     // { email, signup_token, password } -> { message }
     setPassword: (body) => api.post('/auth/set-password', body).then((res) => res.data),
 
-    // { email, password} -> {access_token, refresh_token, token_type }
+    // { email, password} -> {access_token, token_type }; the refresh token arrives as an httpOnly cookie
     login : (body) => api.post('/auth/login', body).then((res)=> res.data),
+
+    // Uses the refresh-token cookie -> { access_token, token_type }. 401 when not signed in
+    refresh: () => api.post('/auth/refresh').then((res) => res.data), 
+
+    // The one-time code from /oauth-success#code=... ->{ access_token, token_type } + the cookie 
+    googleExchange : (code) => api.post('/auth/google/exchange', { code }).then((res)=> res.data),
 
     // { email } -> { message } (same message whether or not the email exists)
     forgotPassword: (body) => api.post('/auth/forgot-password',body).then((res) => res.data),
@@ -22,8 +28,8 @@ export const authApi = {
     // { email, otp_code, new_password } -> { message }
     resetPassword: (body) => api.post('/auth/reset-password',body).then((res) => res.data),
 
-    // Revokes the refresh token on the server 
-    logout : (refreshToken) => api.post('/auth/logout', {refresh_token: refreshToken}).then((res) => res.data),
+    // Revokes the refresh-token cookie on the server and deletes it
+    logout : () => api.post('/auth/logout').then((res) => res.data),
 
     // The signed-in user: { id, name, email, mobile, role, is_active, ...}
     me: () => api.get('/users/me').then((res)=> res.data),

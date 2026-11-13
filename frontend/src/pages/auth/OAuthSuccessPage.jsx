@@ -1,49 +1,51 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { authApi } from '../../api/auth'
 import { getErrorMessage } from '../../api/client'
 import { useAuth } from '../../auth/context'
 import Alert from '../../components/Alert'
 
-// The backend's Google callback sends the browser to /oauth-success#token=...&refresh=...
-// (or #error=blocked when an admin has blocked the account)
+// The backend's Google callback sends the browser to /oauth-success#code=<one-time code>
+// (or #error=blocked when an admin has blocked the account). The code is traded for
+// tokens once, within 60 seconds of signing in; after that it is useless.
 
-function readTokensFromHash() {
+function readHash() {
     const params = new URLSearchParams(window.location.hash.slice(1))
-    const access = params.get('token')
-    const refresh = params.get('refresh')
-    return access && refresh ? {access_token: access, refresh_token: refresh }: null    
+    return { code: params.get('code'), problem: params.get('error') }
 }
 
 export default function OAuthSuccessPage() {
     const { loginWithTokens } = useAuth()
     // Read once, before the effect below wipes the address bar
-    const [tokens] = useState(readTokensFromHash)
+    const [{ code, problem }] = useState(readHash)
     const [error, setError] = useState(() => {
-        if (tokens) return ''
-        if (new URLSearchParams(window.location.hash.slice(1)).get('error') === 'blocked') {
+        if (code) return ''
+        if (problem === 'blocked') {
             return 'This account has been blocked. Contact the admin if you think this is a mistake.'
         }
         return "Google sign-in didn't finish. Please try again."
     })
-
+    // React runs effects twice in development, but the code works only once: trade it once
+    const exchange = useRef(null)
 
     useEffect(()=> {
-      // Remove the tokens from the address bar and browser history straight away
+      // Remove the code from the address bar and browser history straight away
       window.history.replaceState(null, '', window.location.pathname)
-      if(!tokens) return  
+      if(!code) return
 
-      let cancelled = false 
+      let cancelled = false
       // On success the RequireGuest gatekeeper sends the user into the app
-      loginWithTokens(tokens).catch((err)=> {
+      exchange.current ??= authApi.googleExchange(code).then(loginWithTokens)
+      exchange.current.catch((err)=> {
         if (!cancelled) setError(getErrorMessage(err))
       })
     return ()=> {
-        cancelled = true 
+        cancelled = true
     }
     // Run once: loginWithTokens changes on every render of AuthProvider
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tokens])
-    
+    }, [code])
+
     if(error){
         return (
             <>

@@ -5,22 +5,26 @@ import { AuthContext } from "./context";
 
 /*
  Remember who is signed in, for the whole app.
- status: 'loading'    - a token saved earlier, asking the backend who it belongs to
+ status: 'loading'    - on page load, using the refresh-token cookie to find out who is signed in
          'signed-in'  - `user` is the response of GET /users/me
          'signed-out' - no answer
 */
 
 export default function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
-    const [status, setStatus] = useState(() => (tokenStore.getAccess() ? 'loading' : 'signed-out'))
+    const [status, setStatus] = useState('loading')
 
-    // First loads: if a token was saved earlier, load the user it belongs to
+    // First load: the access token is only kept in memory, so ask for a new one with the
+    // refresh-token cookie, then load the user it belongs to. No cookie -> signed out. 
     useEffect(() => {
-        if (!tokenStore.getAccess()) return
         let cancelled = false
-
+            
         authApi
-            .me()
+            .refresh()
+            .then((tokens) => {
+                tokenStore.save(tokens)
+                return authApi.me()
+            })
             .then((me) => {
                 if (cancelled) return
                 setUser(me)
@@ -69,12 +73,11 @@ export default function AuthProvider({ children }) {
     }
 
     function logout() {
-        const refreshToken = tokenStore.getRefresh()
         tokenStore.clear()
         setUser(null)
         setStatus('signed-out')
-        // Ask the backend to revoke the refresh token; we are signed out locally either way
-        if (refreshToken) authApi.logout(refreshToken).catch(() => {})
+        // Ask the backend to revoke and delete the refresh-token cookie; signed out locally either way
+        authApi.logout().catch(() => {})
     }
 
     // After the user edits their profile, show the new name everywhere without reloading
