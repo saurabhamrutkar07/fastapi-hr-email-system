@@ -9,6 +9,8 @@ from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import FRONTEND_URL
 from app.core.rate_limit import limiter,rate_limit_exceeded
+from app.core.monitoring import init_sentry
+from app.core.request_id import request_id_middleware
 
 # ============================================================
 # API Routers
@@ -25,6 +27,7 @@ from app.api.resumes import router as resume_rouer
 from app.api.users import router as users_router
 from app.api.sender_profiles import router as sender_profiles_router
 from app.api.test_mode import router as test_mode_router
+from app.api.health import router as health_router
 
 
 # ============================================================
@@ -82,6 +85,9 @@ async def lifespan(app: FastAPI):
 # ============================================================
 # FastAPI Application
 # ============================================================
+# Before the app is created, so Sentry can hook into FastAPI
+init_sentry()
+
 
 app = FastAPI(
     title="HR Contact & Cold Email System",
@@ -93,7 +99,10 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
-
+# Request id on every log line + clean 500s (app/core/request_id.py).
+# Added before CORS: the middleware added last runs first, so CORS wraps
+# this one and even a crash's 500 gets CORS headers the browser can read.
+app.middleware("http")(request_id_middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_URL],
@@ -197,3 +206,7 @@ app.include_router(
     prefix="/test-mode",
     tags=["Test Mode (admin)"],
 )
+
+# GET /health (no login): is the app and its database up?
+app.include_router(health_router, tags=["Health"])
+

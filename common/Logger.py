@@ -1,5 +1,18 @@
+import contextvars
 import enum
 import logging
+
+# The id of the request being handled right now ("-" outside a request).
+# Set by app/core/request_id.py; a ContextVar keeps each request's own value
+# even when many requests run at the same time.
+request_id_var = contextvars.ContextVar("request_id", default="-")
+
+class RequestIdFilter(logging.Filter):
+    """Adds `request_id` to every log record so the format can print it."""
+
+    def filter(self, record):
+        record.request_id = request_id_var.get()
+        return True 
 
 # Common log messages used throughout the application.
 LOGGER_INFO_START_TEXT = "Started execution of function : "
@@ -57,7 +70,7 @@ class Logger:
 
             # Define how every log message should appear.
             formatter = logging.Formatter(
-                "%(asctime)s | %(levelname)s | %(message)s"
+                "%(asctime)s | %(levelname)s | %(request_id)s | %(message)s"
             )
 
             # Create a handler.
@@ -66,6 +79,8 @@ class Logger:
 
             # Apply the formatter to the console handler.
             console_handler.setFormatter(formatter)
+            console_handler.addFilter(RequestIdFilter())
+
 
             # Attach the console handler to the logger.
             # Without a handler, the logger doesn't know

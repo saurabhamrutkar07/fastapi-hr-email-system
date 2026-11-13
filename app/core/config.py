@@ -46,6 +46,14 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 USE_DUMMY_HR = False
 
 # -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+# SENTRY_DSN empty = Sentry off (local). APP_ENV labels errors in Sentry.
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+APP_ENV = os.getenv("APP_ENV", "development")
+
+
+# -----------------------------------------------------------------------------
 # AUTH / JWT / OTP Configuration
 # -----------------------------------------------------------------------------
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", None)
