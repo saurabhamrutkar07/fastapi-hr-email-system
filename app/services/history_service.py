@@ -14,8 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
-
-from app.database.database import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import EmailSendDetail, EmailTransaction, User
 
 
@@ -58,7 +57,7 @@ def to_item(transaction: EmailTransaction, detail: EmailSendDetail | None, sende
     }
 
 
-async def list_history(user: User, status_filter: str | None, q: str, days: int | None, limit: int, offset: int) -> dict:
+async def list_history(db: AsyncSession,user: User, status_filter: str | None, q: str, days: int | None, limit: int, offset: int) -> dict:
     """One page of emails plus how many match the filters in total (for "Page 2 of 7")."""
     rows_query = filtered(
         visible_to(select(EmailTransaction, EmailSendDetail, User), user).outerjoin(User, User.id == EmailTransaction.user_id),
@@ -66,22 +65,20 @@ async def list_history(user: User, status_filter: str | None, q: str, days: int 
     )
     count_query = filtered(visible_to(select(func.count()).select_from(EmailTransaction), user), status_filter, q, days)
 
-    async with AsyncSessionLocal() as session:
-        total = await session.scalar(count_query)
-        result = await session.execute(
-            rows_query.order_by(EmailTransaction.created_at.desc(), EmailTransaction.id.desc()).limit(limit).offset(offset)
-        )
-        rows = result.all()
+    total = await db.scalar(count_query)
+    result = await db.execute(
+        rows_query.order_by(EmailTransaction.created_at.desc(), EmailTransaction.id.desc()).limit(limit).offset(offset)
+    )
+    rows = result.all()
 
     return {"total": total, "items": [to_item(*row) for row in rows]}
 
 
-async def get_history_item(user: User, request_id: str) -> dict:
+async def get_history_item(db: AsyncSession,user: User, request_id: str) -> dict:
     """One email with its full content, or 404 (also for someone else's, unless admin)."""
     query = visible_to(select(EmailTransaction, EmailSendDetail, User), user).outerjoin(User, User.id == EmailTransaction.user_id)
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(query.where(EmailTransaction.request_id == request_id))
-        row = result.first()
+    result = await db.execute(query.where(EmailTransaction.request_id == request_id))
+    row = result.first()
 
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Email not found.")

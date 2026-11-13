@@ -11,11 +11,12 @@ Coordinates business logic for:
 """
 
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.fresh_contacts import AddFreshContactRequest, BulkAddFreshContactsRequest
 from app.database.repositories import add_fresh_hr_contact, add_fresh_hr_contact_bulk, delete_fresh_hr_contact ,get_all_fresh_recruiters, update_fresh_hr_contact
 
 
-async def create_fresh_contact(payload: AddFreshContactRequest):
+async def create_fresh_contact(db: AsyncSession,payload: AddFreshContactRequest):
     """
     Business Logic: Inserts a single fresh HR contact into `hr_contacts_v2`.
 
@@ -26,7 +27,7 @@ async def create_fresh_contact(payload: AddFreshContactRequest):
     make the response say what actually happened, instead of always
     claiming "added successfully".
     """
-    contact, is_new_contact = await add_fresh_hr_contact(payload)
+    contact, is_new_contact = await add_fresh_hr_contact(db,payload)
     return {
         "status": "success",
         "message": (
@@ -40,7 +41,7 @@ async def create_fresh_contact(payload: AddFreshContactRequest):
     }
 
 
-async def create_fresh_contacts_bulk(payload: BulkAddFreshContactsRequest):
+async def create_fresh_contacts_bulk(db: AsyncSession,payload: BulkAddFreshContactsRequest):
     """
     Business Logic: Bulk inserts a batch of fresh HR contacts into
     `hr_contacts_v2` (plus each contact's extra emails/phones into the
@@ -51,7 +52,7 @@ async def create_fresh_contacts_bulk(payload: BulkAddFreshContactsRequest):
     `create_fresh_contact()` above) -- so we report `created_count` and
     `merged_count` separately rather than one misleading total.
     """
-    counts = await add_fresh_hr_contact_bulk(payload.contacts)
+    counts = await add_fresh_hr_contact_bulk(db,payload.contacts)
     total_processed = counts["created_count"] + counts["merged_count"]
     return {
         "status": "success",
@@ -65,14 +66,14 @@ async def create_fresh_contacts_bulk(payload: BulkAddFreshContactsRequest):
     }
 
 
-async def list_fresh_contacts():
+async def list_fresh_contacts(db: AsyncSession):
     """
     Business Logic: Fetches and formats all recruiter contacts from
     `hr_contacts_v2`, along with their full email list (`hr_contact_emails`)
     and phone list (`hr_contact_phones`). The UI searches, filters and 
     pages this list itself.
     """
-    recruiters = await get_all_fresh_recruiters()
+    recruiters = await get_all_fresh_recruiters(db)
     return [
         {
             "id": r.id,
@@ -102,7 +103,7 @@ async def list_fresh_contacts():
     ]
 
 
-async def edit_fresh_contact(contact_id:int, payload:AddFreshContactRequest):
+async def edit_fresh_contact(db: AsyncSession,contact_id:int, payload:AddFreshContactRequest):
     """
     Business logic: Replaces a contact's details and email/phone lists.
     404 if the contact doesn't exist, 409 if an email/phone belongs to
@@ -110,7 +111,7 @@ async def edit_fresh_contact(contact_id:int, payload:AddFreshContactRequest):
     """
 
     try:
-        contact = await update_fresh_hr_contact(contact_id,payload)
+        contact = await update_fresh_hr_contact(db,contact_id,payload)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
@@ -124,13 +125,13 @@ async def edit_fresh_contact(contact_id:int, payload:AddFreshContactRequest):
     }
 
 
-async def remove_fresh_contact(contact_id:int):
+async def remove_fresh_contact(db: AsyncSession,contact_id:int):
     """
     Business Logic: Deletes a contact with its emails and phones.
     404 if the contact doesn't exist.
     """
 
-    if not await delete_fresh_hr_contact(contact_id):
+    if not await delete_fresh_hr_contact(db,contact_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Contact not found")
 
     return {"status": "success", "message": "Contact deleted"}

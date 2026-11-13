@@ -1,239 +1,45 @@
 """
-Email API Controller (app/api/email.py)
-
-This module contains all HTTP endpoints related to email operations.
-
-Available endpoints:
-    1. POST /email/send-cold
-       Sends cold application emails to multiple HR contacts.
-
-    2. POST /email/send-to-hr
-       Sends a cold application email to one specific HR contact.
-
-    3. GET /email/transactions/{request_id}
-       Retrieves the transaction details for a specific request ID.
-
-    4. GET /email/transactions
-       Retrieves a paginated list of email transactions.
-
-Security:
-    All endpoints in this router require authentication through
-    the `key-secret` header.
+===============================================================================
+Email API Router (app/api/email.py)
+===============================================================================
+Every route needs a signed-in user (router-level get_current_user):
+- GET  /email/transactions          recent sends (dashboard)
+- GET  /email/stats                 dashboard numbers
+- POST /email/preview               the exact email one contact would get
+- POST /email/send                  queue up to 50 emails, sent in the background
+- GET  /email/status                how each queued email went
+- GET  /email/last-sent             when each address was last emailed
+- GET  /email/history[/{id}]        sent emails with filters / one in full
+Each route hands its one request DB session (get_db) to the services.
+===============================================================================
 """
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks, Request
 from typing import List, Literal, Optional
-# Request/Response Pydantic schemas.
-# These classes validate incoming request data and structure outgoing responses.
-from app.core.encryption import decrypt_value
-from app.schemas.email import JobApplicationEmailRequest, SingleHREmailRequest, EmailTransactionResponse, EmailStatsResponse
-from app.schemas.sending import EmailPreviewRequest, EmailPreviewResponse, EmailStatusItem, MAX_RECIPIENTS, SendEmailsRequest, SendEmailsResponse
-from app.services.send_service import email_statuses, last_sent, preview_email, queue_emails
-from app.schemas.history import HistoryDetail, HistoryPage
-from app.services.history_service import get_history_item, list_history
-from app.services.cold_email_service import send_email_to_individual, get_user_smtp_config,get_recruiters_for_sending,send_cold_emails_background,get_user_default_template, get_user_active_resume
-from app.database.repositories import get_transaction_by_request_id, list_email_transactions, get_email_stats
-from app.core.security import get_current_user
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core import rate_limit
 from app.core.rate_limit import limiter
+from app.core.security import get_current_user
+from app.database.database import get_db
+from app.database.repositories import get_email_stats, list_email_transactions
 from app.models.models import User
+from app.schemas.email import EmailStatsResponse, EmailTransactionResponse
+from app.schemas.history import HistoryDetail, HistoryPage
+from app.schemas.sending import EmailPreviewRequest, EmailPreviewResponse, EmailStatusItem, MAX_RECIPIENTS, SendEmailsRequest, SendEmailsResponse
+from app.services.history_service import get_history_item, list_history
+from app.services.send_service import email_statuses, last_sent, preview_email, queue_emails
 from common.Logger import Logger
 
-# ---------------------------------------------------------------------------
-# Logger Initialization
-# ---------------------------------------------------------------------------
-
-# Get the application logger.
-#
-# `Logger.get_logger()` returns the configured logger instance.
-# We create it once at module level and reuse it throughout this controller.
-
-logger = Logger.get_logger() 
-
-# ---------------------------------------------------------------------------
-# Router Configuration
-# ---------------------------------------------------------------------------
-
-# Create an APIRouter instance.
-#
-# `dependencies` defined here apply to EVERY endpoint in this router.
-#
-# Therefore, every request to:
-#
-#     /email/send-cold
-#     /email/send-to-hr
-#     /email/transactions/{request_id}
-#     /email/transactions
-#
-# must pass the `verify_key_secret` security check first.
-
+logger = Logger.get_logger()
 
 router = APIRouter(
     dependencies=[Depends(get_current_user)]
 )
 
-# ---------------------------------------------------------------------------
-# Send Cold Emails
-# ---------------------------------------------------------------------------
-
-
-@router.post("/send-cold",status_code=status.HTTP_202_ACCEPTED)
-async def send_cold_email(payload: JobApplicationEmailRequest,background_tasks: BackgroundTasks, current_user:User = Depends(get_current_user)):
-     """
-        Ques cold application emails to be sent in the background.
-        validated SMTP/te,plate/resume synchronously (fails fast with a
-        clears error if not configured); the actual sending happens after
-        this response is returned.
-     """
-     # Log successful completion of the operation.
-     logger.info("Received request to send cold emails (background).")
-
-     smtp_credential = await get_user_smtp_config(current_user.id)
-     smpt_password = decrypt_value(smtp_credential.encrypted_password)
-     email_template = await get_user_default_template(current_user.id)
-     resume_bytes = await get_user_active_resume(current_user.id)
-
-     recruiters = await get_recruiters_for_sending()
-     request_ids = [str(uuid.uuid4()) for _ in recruiters]
-
-
-     background_tasks.add_task(
-         send_cold_emails_background,
-         payload=payload,
-         user_id=current_user.id,
-         recruiters=recruiters,
-         request_ids=request_ids,
-         smtp_credential=smtp_credential,
-         smtp_password=smpt_password,
-         email_template=email_template,
-         resume_bytes=resume_bytes,
-     )
-     
-     logger.info("Cold email batch queued for background sending")
-     return {
-         "status": "accepted",
-         "total": len(recruiters),
-         "request_ids": request_ids,
-         "message": "Emails are being sent in the background. Check /email/transactions for results.", 
-     }
-
-     
-     
-        
-
-# ---------------------------------------------------------------------------
-# Send Email To Individual HR
-# ---------------------------------------------------------------------------
-
-@router.post("/send-to-hr")
-async def send_email_to_hr(payload: SingleHREmailRequest,curren_user : User = Depends(get_current_user)):
-     """
-        Send a personalized cold email to one specific HR contact.
-
-        Flow:
-            Client
-            ↓
-            FastAPI Endpoint
-            ↓
-            Request validation
-            ↓
-            send_email_to_individual()
-            ↓
-            Email sending
-            ↓
-            Transaction creation
-            ↓
-            Response
-        """
-     logger.info("Received request to send email to individual HR.")
-     try:
-
-        # Delegate the actual email-sending operation to the service layer.
-        result = await send_email_to_individual(payload,user_id=curren_user.id)
-
-        logger.info(
-            "Email to individual HR completed successfully."
-        )
-
-        return result
-
-     except Exception as exc:
-         # Log the complete exception traceback for debugging.
-        logger.exception(
-            f"Failed to send email to individual HR: {exc}"
-        )
-
-        # Allow FastAPI/global exception handling to process the exception.
-        raise
-
-     
-
-# ---------------------------------------------------------------------------
-# Get Email Transaction By Request ID
-# ---------------------------------------------------------------------------
-
-
-@router.get("/transactions/{request_id}", response_model=EmailTransactionResponse)
-async def get_email_transaction(request_id: str, curret_user: User = Depends(get_current_user)):
-    """
-    Retrieve transaction details for a specific request ID.
-
-    The request ID uniquely identifies an email transaction.
-
-    Flow:
-        Client
-          ↓
-        GET /email/transactions/{request_id}
-          ↓
-        Repository
-          ↓
-        PostgreSQL
-          ↓
-        Transaction returned
-          ↓
-        Response validation using EmailTransactionResponse
-          ↓
-        Client
-    """
-    logger.info(
-        f"Fetching email transaction for request_id: {request_id}"
-    )
-
-    # Ask the repository layer to find the transaction.
-    #
-    # The controller does not directly execute SQL.
-    transaction = await get_transaction_by_request_id(request_id)
-
-    # If the repository cannot find a transaction with this request ID,
-    # return HTTP 404 to the client.
-    if not transaction or (curret_user.role != "admin" and transaction.user_id != curret_user.id):
-
-        logger.warning(
-            f"Transaction not found for request_id: {request_id}"
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"Transaction with request_id "
-                f"'{request_id}' not found."
-            ),
-        )
-
-    logger.info(
-        f"Transaction found successfully for request_id: {request_id}"
-    )
-
-    return transaction
-
-
-# ---------------------------------------------------------------------------
-# Get Email Transaction History
-# ---------------------------------------------------------------------------
-
 
 @router.get("/transactions", response_model=List[EmailTransactionResponse])
-async def get_email_transactions_list(limit: int = Query(50, ge=1, le=100), offset: int = Query(0,ge=0),current_user: User = Depends(get_current_user)):
+async def get_email_transactions_list(limit: int = Query(50, ge=1, le=100), offset: int = Query(0,ge=0),current_user: User = Depends(get_current_user),db: AsyncSession = Depends(get_db)):
     """
     Retrieve recent email transactions with pagination.
 
@@ -270,6 +76,7 @@ async def get_email_transactions_list(limit: int = Query(50, ge=1, le=100), offs
 
     # Delegate database operation to the repository layer.
     transactions = await list_email_transactions(
+        db,
         limit=limit,
         offset=offset,
         user_id = filter_user_id,
@@ -285,7 +92,7 @@ async def get_email_transactions_list(limit: int = Query(50, ge=1, le=100), offs
 async def get_email_stats_summary(
     days:int = Query(14,ge=1,le=90,description="How many days back, today included"),
     tz_offset_minutes: int = Query(0,ge=-720, le=840, description="Viewer's offset from UTC in minutes, e.g. 330 for India"),
-    current_user: User =Depends(get_current_user),
+    current_user: User =Depends(get_current_user),db: AsyncSession = Depends(get_db)
 ):
     """
     Dashboard numbers : sent/failed per day for the last `days` days ,
@@ -299,7 +106,7 @@ async def get_email_stats_summary(
     """
 
     filter_user_id = None if current_user.role == 'admin' else current_user.id 
-    return await get_email_stats(days=days,tz_offset_minutes=tz_offset_minutes,user_id=filter_user_id)
+    return await get_email_stats(db,days=days,tz_offset_minutes=tz_offset_minutes,user_id=filter_user_id)
 
 
 
@@ -313,12 +120,13 @@ async def get_email_stats_summary(
 async def preview_email_for_contact(
     payload: EmailPreviewRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     The exact email one contact would get with this template and sender
     details: subject, body and the attachment's file name. Nothing is sent.
     """
-    return await preview_email(current_user, payload.contact_id, payload.template_id, payload.sender_profile_id)
+    return await preview_email(db,current_user, payload.contact_id, payload.template_id, payload.sender_profile_id)
 
 
 @router.post("/send", response_model=SendEmailsResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -328,6 +136,7 @@ async def send_emails_to_contacts(
     payload: SendEmailsRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Sends the template to up to 50 chosen contacts, one email each, in the
@@ -335,26 +144,27 @@ async def send_emails_to_contacts(
     template or contact fails right away with nothing sent. Follow the
     returned request ids with /email/status.
     """
-    return await queue_emails(current_user, payload, background_tasks)
+    return await queue_emails(db,current_user, payload, background_tasks)
 
 
 @router.get("/status", response_model=List[EmailStatusItem])
 async def get_email_statuses(
     request_ids: str = Query(..., max_length=2000, description="Request ids from /email/send, comma-separated"),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """How each of these emails went: PENDING, SUCCESS or FAILED (with the reason)."""
     ids = [i.strip() for i in request_ids.split(",") if i.strip()][:MAX_RECIPIENTS]
-    return await email_statuses(current_user.id, ids)
+    return await email_statuses(db,current_user.id, ids)
 
 
 @router.get("/last-sent")
-async def get_last_sent(current_user: User = Depends(get_current_user)) -> dict[str, str]:
+async def get_last_sent(current_user: User = Depends(get_current_user),db: AsyncSession = Depends(get_db)) -> dict[str, str]:
     """
     When the user last emailed each address successfully, so the Send
     page can say "Emailed on 20 Oct": { "hr@company.com": "2026-10-20T..." }
     """
-    return await last_sent(current_user.id)
+    return await last_sent(db,current_user.id)
 
 
 
@@ -371,6 +181,7 @@ async def get_email_history(
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     One page of sent emails, newest first, and how many match in total.
@@ -378,10 +189,10 @@ async def get_email_history(
     Example:
         /email/history?status=FAILED&q=zoho&days=30&limit=25&offset=0
     """
-    return await list_history(current_user, status_filter, q.strip(), days, limit, offset)
+    return await list_history(db,current_user, status_filter, q.strip(), days, limit, offset)
 
 
 @router.get("/history/{request_id}", response_model=HistoryDetail)
-async def get_email_history_item(request_id: str, current_user: User = Depends(get_current_user)):
+async def get_email_history_item(request_id: str, current_user: User = Depends(get_current_user),db: AsyncSession = Depends(get_db)):
     """One sent email with what it said, the template and resume version used."""
-    return await get_history_item(current_user, request_id)
+    return await get_history_item(db,current_user, request_id)

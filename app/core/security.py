@@ -2,18 +2,15 @@
 ===============================================================================
 API Security Dependency (security.py)
 ===============================================================================
-Provides authentication dependency functions used to protect API routes.
-Enforces header-based authentication by validating the `key-secret` HTTP header
-against the configured `ADMIN_KEY` environment variable.
+Password hashing, JWT tokens, and the dependencies that protect API routes: get_current_user (a valid access token), require_admin and ensure_not_blocked.
 ===============================================================================
 """
 import uuid
-from fastapi import HTTPException, Header, status, Depends
+from fastapi import HTTPException, status, Depends
 from passlib.context import CryptContext 
 from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from app.core.config import (
-    ADMIN_KEY,
     JWT_SECRET_KEY,
     JWT_ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -26,24 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.database import get_db
 from app.models.models import User 
 
-
-def verify_key_secret(key_secret: str = Header(...)):
-    """
-    FastAPI Security Dependency:
-    ----------------------------
-    Inspects incoming HTTP request headers for `key-secret`.
-    Compares the provided header value against `ADMIN_KEY`.
-
-    Raises:
-    -------
-    HTTPException (401 Unauthorized):
-        If `key-secret` header is missing or does not match `ADMIN_KEY`.
-    """
-    if key_secret != ADMIN_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing key secret. Access denied."
-        )
 
 pwd_context = CryptContext(schemes=["bcrypt"],deprecated = "auto")
 
@@ -145,7 +124,7 @@ async def get_current_user(
 
     return user
 
-BLCOKED_MESSAGE = "This account has been blocked. Contact the admin if you think this is a mistake."
+BLOCKED_MESSAGE = "This account has been blocked. Contact the admin if you think this is a mistake."
 
 
 def ensure_not_blocked(user:User, status_code:int = status.HTTP_403_FORBIDDEN) -> None:
@@ -156,7 +135,7 @@ def ensure_not_blocked(user:User, status_code:int = status.HTTP_403_FORBIDDEN) -
     can't undo a block.
     """
     if user.blocked_at is not None:
-        raise HTTPException(status_code=status_code, detail=BLCOKED_MESSAGE)
+        raise HTTPException(status_code=status_code, detail=BLOCKED_MESSAGE)
 
 def require_admin(current_user: User = Depends(get_current_user))-> User:
     """

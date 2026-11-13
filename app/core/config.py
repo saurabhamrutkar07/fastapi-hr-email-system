@@ -46,17 +46,6 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 USE_DUMMY_HR = False
 
 # -----------------------------------------------------------------------------
-# API Security Configuration
-# -----------------------------------------------------------------------------
-ADMIN_KEY = os.getenv("ADMIN_KEY", None)
-
-# Ensure application refuses to start if ADMIN_KEY environment variable is missing
-if not ADMIN_KEY:
-    raise RuntimeError("Admin key is not set. Please specify ADMIN_KEY in your .env file.")
-
-
-
-# -----------------------------------------------------------------------------
 # AUTH / JWT / OTP Configuration
 # -----------------------------------------------------------------------------
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", None)

@@ -12,8 +12,7 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import get_db
-#from app.core.security import verify_key_secret
-from app.core.security import get_current_user,require_admin
+from app.core.security import get_current_user, require_admin
 
 
 from app.services.hr_contact_excel_service import (
@@ -37,8 +36,14 @@ from app.services.fresh_contact_service import (
 
 # All routes here operate on the v2 schema only:
 # `hr_contacts_v2`, `hr_contact_emails`, `hr_contact_phones`.
-# Mounted under `/hr-contacts/v2` (see main.py) and protected by
-# `key-secret` header auth on every route.
+# Mounted under `/hr-contacts/v2` (see main.py). Every route needs a
+# signed-in user (get_current_user below); some also need an admin.
+#
+# One DB session per request:
+#   `db: AsyncSession = Depends(get_db)` makes FastAPI open one session for
+#   the request, hand it to the route and close it after the response. The
+#   route passes that same `db` to the service -> repository, so the whole
+#   request uses a single pool connection instead of opening its own ones.
 router = APIRouter(
     tags=["HR Contacts"],
     dependencies=[Depends(get_current_user)],
@@ -176,48 +181,50 @@ async def upload_hr_contacts_file(
 
 
 @router.post("/add", status_code=status.HTTP_201_CREATED)
-async def add_hr_contact_v2(payload: AddFreshContactRequest):
+async def add_hr_contact_v2(payload: AddFreshContactRequest, db: AsyncSession = Depends(get_db)):
     """
-    Adds a single HR contact into `hr_contacts_v2`. Any signed-in user may 
+    Adds a single HR contact into `hr_contacts_v2`. Any signed-in user may
     add one (the router requires a login); contacts are shared by everyone.
     Bulk add and file upload stay admin-only.
     """
-    return await create_fresh_contact(payload)
+    # `db` always goes first: service -> repository use this same session
+    return await create_fresh_contact(db, payload)
 
 
-@router.post("/bulk-add", status_code=status.HTTP_201_CREATED,dependencies=[Depends(require_admin)])
-async def bulk_add_hr_contacts_v2(payload: BulkAddFreshContactsRequest):
+@router.post("/bulk-add", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
+async def bulk_add_hr_contacts_v2(payload: BulkAddFreshContactsRequest, db: AsyncSession = Depends(get_db)):
     """
-    Adds multiple HR contacts into `hr_contacts_v2` in a single JSON request.
+    Admin only: adds multiple HR contacts into `hr_contacts_v2` in a single
+    JSON request (saved together with one commit at the end).
     """
-    return await create_fresh_contacts_bulk(payload)
+    return await create_fresh_contacts_bulk(db, payload)
 
 
 @router.get("/list", response_model=List[FreshContactResponse])
-async def get_hr_contacts_v2():
+async def get_hr_contacts_v2(db: AsyncSession = Depends(get_db)):
     """
     Retrieves all HR contacts from `hr_contacts_v2`, including their full
     `hr_contact_emails` and `hr_contact_phones` lists. Any signed-in user
     can view them; sending still requires SMTP credentials. Search,
     filters and paging run in the UI.
     """
-    return await list_fresh_contacts()
+    return await list_fresh_contacts(db)
 
 
 @router.put("/{contact_id}", dependencies=[Depends(require_admin)])
-async def update_hr_contact_v2(contact_id:int, payload:AddFreshContactRequest):
+async def update_hr_contact_v2(contact_id: int, payload: AddFreshContactRequest, db: AsyncSession = Depends(get_db)):
     """
     Admin only: replaces a contact's details and its email/phone lists.
     Send the same body as `/add`; emails/phones left out are removed.
     """
-    return await edit_fresh_contact(contact_id,payload)
+    return await edit_fresh_contact(db, contact_id, payload)
 
 
-@router.delete("/{contact_id}",dependencies=[Depends(require_admin)])
-async def delete_hr_contact_v2(contact_id:int):
+@router.delete("/{contact_id}", dependencies=[Depends(require_admin)])
+async def delete_hr_contact_v2(contact_id: int, db: AsyncSession = Depends(get_db)):
     """
     Admin only: deletes a contact together with its emails and phones.
     """
-    return await remove_fresh_contact(contact_id)
+    return await remove_fresh_contact(db, contact_id)
 
 

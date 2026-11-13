@@ -15,10 +15,6 @@ from app.core.rate_limit import limiter,rate_limit_exceeded
 # ============================================================
 
 from app.api.email import router as email_router
-from app.api.company import router as company_router
-from app.api.hr_contacts_imports import (
-    router as hr_contacts_import_router,
-)
 from app.api.hr_contacts import (
     router as hr_contacts_router,
 )
@@ -130,49 +126,6 @@ app.include_router(
     email_router,
     prefix="/email",
     tags=["Email"],
-)
-
-
-# ------------------------------------------------------------
-# Company APIs
-#
-# Example:
-# POST /company/...
-# ------------------------------------------------------------
-
-logger.info(
-    "Registering Company Router"
-)
-
-app.include_router(
-    company_router,
-    prefix="/company",
-    tags=["Company"],
-)
-
-
-# ------------------------------------------------------------
-# HR Contact Import APIs
-#
-# This router should contain:
-#
-# - Excel upload
-# - CSV upload
-# - Other HR contact import functionality
-#
-# Example:
-#
-# POST /hr-contacts/upload-file
-# ------------------------------------------------------------
-
-logger.info(
-    "Registering HR Contact Import Router"
-)
-
-app.include_router(
-    hr_contacts_import_router,
-    prefix="/hr-contacts",
-    tags=["HR Contacts"],
 )
 
 

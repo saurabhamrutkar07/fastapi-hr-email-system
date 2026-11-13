@@ -21,6 +21,7 @@ from email.utils import make_msgid
 
 from fastapi import BackgroundTasks,HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import decrypt_value
 from app.core.mailer import send_email
@@ -29,7 +30,8 @@ from app.models.models import AdminTestMode, EmailSendDetail, EmailTransaction,H
 from app.schemas.sending import SendEmailsRequest
 from app.services.cold_email_service import(
     classify_email_exception,
-    get_user_active_resume,
+    download_resume,
+    get_user_active_resume_path,
     get_user_smtp_config,
     render_cold_email,
 )
@@ -87,18 +89,18 @@ def attachment_name(user:User) -> str:
     return f"{safe or 'My'}_Resume.pdf"
 
 
-async def get_owned(session,model,item_id:int, user_id:int, label:str):
+async def get_owned(db: AsyncSession,model,item_id:int, user_id:int, label:str):
     """The user's own row of `model` with this id, or 404 (also for someone else's)."""
-    result = await session.execute(select(model).where(model.id == item_id, model.user_id == user_id))
+    result = await db.execute(select(model).where(model.id == item_id, model.user_id == user_id))
     item = result.scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{label} not found.")
     return item
 
 
-async def get_contacts(session, contact_ids: list[int])-> list[HRContactsV2]:
+async def get_contacts(db: AsyncSession, contact_ids: list[int])-> list[HRContactsV2]:
     """ The contacts in the order they were picked, or 404 if any has been deleted.""" 
-    result = await session.execute(select(HRContactsV2).where(HRContactsV2.id.in_(contact_ids)))
+    result = await db.execute(select(HRContactsV2).where(HRContactsV2.id.in_(contact_ids)))
     by_id = {contact.id: contact for contact in result.scalars().all()}
     missing = [i for i in contact_ids if i not in by_id]
     if missing:
@@ -109,7 +111,7 @@ async def get_contacts(session, contact_ids: list[int])-> list[HRContactsV2]:
     return [by_id[i] for i in contact_ids]
 
 
-async def allowed_test_emails(user: User) -> set[str] |None :
+async def allowed_test_emails(db: AsyncSession,user: User) -> set[str] |None :
     """
     While an admin's test mode is on, the only addresses they may send to
     (lower-case). None when sends are unrestricted: regular users, or an 
@@ -117,20 +119,18 @@ async def allowed_test_emails(user: User) -> set[str] |None :
     """
     if user.role != "admin":
         return None
-    async with AsyncSessionLocal() as session:
-        row = await session.get(AdminTestMode, user.id)
+    row = await db.get(AdminTestMode, user.id)
     if row is not None and not row.enabled:
         return None 
     emails = row.test_emails if row else ""
     return {email.lower() for email in emails.split(",") if email}
 
 
-async def preview_email(user:User, contact_id:int, template_id:int, sender_profile_id:int) -> dict: 
+async def preview_email(db: AsyncSession, user:User, contact_id:int, template_id:int, sender_profile_id:int) -> dict: 
     """ The exact email `contact_id` would get. Nothing is sent or saved."""
-    async with AsyncSessionLocal() as session:
-        template = await get_owned(session, UserEmailTemplate,template_id, user.id ,"Template")
-        profile = await get_owned(session, UserSenderProfile, sender_profile_id, user.id, "Sender details")
-        [contact] = await get_contacts(session, [contact_id])
+    template = await get_owned(db, UserEmailTemplate,template_id, user.id ,"Template")
+    profile = await get_owned(db, UserSenderProfile, sender_profile_id, user.id, "Sender details")
+    [contact] = await get_contacts(db, [contact_id])
 
     subject, body = render_email(template,build_context(user, profile, contact))
     return {
@@ -143,32 +143,34 @@ async def preview_email(user:User, contact_id:int, template_id:int, sender_profi
         "attachment_name": attachment_name(user)
     }
 
-async def active_resume_version(user_id: int) -> int | None:
+async def active_resume_version(db: AsyncSession,user_id: int) -> int | None:
     """The version number of the resume that goes with this user's emails, e.g. 2 for "v2"."""
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(UserResume.version_number).where(UserResume.user_id == user_id, UserResume.is_active == True)
-        )
-        return result.scalars().first()
+    result = await db.execute(
+        select(UserResume.version_number).where(UserResume.user_id == user_id, UserResume.is_active == True)
+    )
+    return result.scalars().first()
 
 
-async def queue_emails(user:User, payload: SendEmailsRequest, background_tasks: BackgroundTasks) -> dict:
+async def queue_emails(db: AsyncSession,user:User, payload: SendEmailsRequest, background_tasks: BackgroundTasks) -> dict:
     """
     Checks everything first (Gmail connected, an active resume, the 
     template, the sender details, the contacts and test mode), fills in 
     every email, then sends them in the background. Returns one request id 
     per contact, to follow with /email/status.
     """
-    allowed = await allowed_test_emails(user)
-    smtp_credential = await get_user_smtp_config(user.id)
-    resume_bytes = await get_user_active_resume(user.id)
-    resume_version = await active_resume_version(user.id)
+    allowed = await allowed_test_emails(db, user)
+    smtp_credential = await get_user_smtp_config(db, user.id)
+    resume_version = await active_resume_version(db, user.id)
+    
+    template = await get_owned(db, UserEmailTemplate, payload.template_id, user.id, "Template")
+    profile = await get_owned(db, UserSenderProfile,payload.sender_profile_id, user.id, "Sender details")
+    contacts = await get_contacts(db, payload.contact_ids)
+    resume_path = await get_user_active_resume_path(db, user.id)
+    # Everything is read: give the connection back to the pool before the
+    # slow S3 download instead of holding it (objects stay usable)
+    await db.commit()
+    resume_bytes = await download_resume(resume_path)
 
-
-    async with AsyncSessionLocal() as session:
-        template = await get_owned(session, UserEmailTemplate, payload.template_id, user.id, "Template")
-        profile = await get_owned(session, UserSenderProfile,payload.sender_profile_id, user.id, "Sender details")
-        contacts = await get_contacts(session, payload.contact_ids)
 
     if allowed is not None:
         blocked = [c.email for c in contacts if c.email.lower() not in allowed]
@@ -256,7 +258,11 @@ async def send_jobs(
 
 
 async def record_outcome(user_id: int, job: dict, status: str, error_code: str | None, response_details: str) -> None:
-    """Saves how one email went (email_transactions) and what it said (email_send_details)."""
+    """
+    Saves how one email went (email_transactions) and what it said
+    (email_send_details). Runs in the background after the response, when
+    the request's session is already closed, so it opens its own.
+    """
     contact = job["contact"]
     async with AsyncSessionLocal() as session:
         session.add(EmailTransaction(
@@ -282,16 +288,16 @@ async def record_outcome(user_id: int, job: dict, status: str, error_code: str |
         await session.commit()
 
 
-async def email_statuses(user_id:int, request_ids: list[str])-> list[dict]:
+async def email_statuses(db: AsyncSession,user_id:int, request_ids: list[str])-> list[dict]:
     """How each queued email went; PENDING while it hasn't been tried yet."""
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(EmailTransaction).where(
-                EmailTransaction.user_id == user_id,
-                EmailTransaction.request_id.in_(request_ids),
-            )
+    
+    result = await db.execute(
+        select(EmailTransaction).where(
+            EmailTransaction.user_id == user_id,
+            EmailTransaction.request_id.in_(request_ids),
         )
-        done = {t.request_id: t for t in result.scalars().all()}
+    )
+    done = {t.request_id: t for t in result.scalars().all()}
 
     return [
         {
@@ -304,12 +310,11 @@ async def email_statuses(user_id:int, request_ids: list[str])-> list[dict]:
         ]
 
 
-async def last_sent(user_id: int) -> dict[str, str]:
+async def last_sent(db: AsyncSession, user_id: int) -> dict[str, str]:
     """{ recipient email (lower-case): when this user last emailed it successfully }"""
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(func.lower(EmailTransaction.recipient_email), func.max(EmailTransaction.created_at))
-            .where(EmailTransaction.user_id == user_id, EmailTransaction.status == "SUCCESS")
-            .group_by(func.lower(EmailTransaction.recipient_email))
-        )
-        return {email: sent_at.isoformat() for email, sent_at in result.all()}
+    result = await db.execute(
+        select(func.lower(EmailTransaction.recipient_email), func.max(EmailTransaction.created_at))
+        .where(EmailTransaction.user_id == user_id, EmailTransaction.status == "SUCCESS")
+        .group_by(func.lower(EmailTransaction.recipient_email))
+    )
+    return {email: sent_at.isoformat() for email, sent_at in result.all()}
