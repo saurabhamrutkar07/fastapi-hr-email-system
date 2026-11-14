@@ -1,0 +1,84 @@
+# CI: Github runs this on its own fresh machines every time code is pushed,
+# and on every pull request into main. A red cross means somthing broke. 
+
+name: CI 
+
+# ---------------------------------------------------------------- when to run
+on: 
+  push:                   # any push, to any branch 
+  pull_request:           
+    branches: [main]      # a pull request that wants to merge into main 
+
+jobs:
+  # -------------------------------------------------------------- backend
+  backend:
+    name: Backend tests 
+    runs-on: ubuntu-latest         # a brand-new Linux machine from GitHub
+
+
+    # A thorowaway Postgres just for this run, like mail_scheduler_test on the laptop. 
+    services:
+      postgres:
+        image: postgres:17 
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mail_scheduler_test 
+        ports:
+          - 5432:5432
+        # wait until the database is ready before the steps start 
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s 
+          --health-timeout 5s 
+          --health-retries 10 
+
+  # The tests read this, the same way they read .env on the laptop.
+    env:
+        TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/mail_scheduler_test
+
+    steps:
+      - name: Get the code 
+        uses: actions/checkout@v4
+
+
+      - name: Install Python 3.12 
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip              # reuse diwnloaded packages on the next run 
+        
+      - name: Install packages
+        run: pip install -r requirements.txt 
+      
+      - name: Run the tests 
+        run: python -m pytest 
+
+  # -------------------------------------------------------------- frontend
+  frontend:
+    name: Frontend lint and build 
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend   # every "run" below happens inside frontend/
+
+    
+    steps:
+      - name: Get the code 
+        uses: actions/checkout@v4
+
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json 
+
+      - name: Install packages
+        run: npm ci                     # exact versions from package-lock.json 
+
+      - name: Lint 
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
