@@ -10,11 +10,10 @@ from app.models.models import UserResume
 from tests.helpers import headers_for
 
 
-@pytest.fixture
-async def ready(client, user):
-    """A user with everything needed to send: Gmail, resume, template, profile, 3 contacts."""
-    h = headers_for(user)
-    await client.post("/smtp-credentials/", headers=h, json={"email_address": user.email, "password": "abcd efgh ijkl mnop"})
+async def set_up_sender(client, person):
+    """Give someone everything needed to send: Gmail, resume, template, profile, 3 contacts."""
+    h = headers_for(person)
+    await client.post("/smtp-credentials/", headers=h, json={"email_address": person.email, "password": "abcd efgh ijkl mnop"})
     await client.post("/resumes/upload", headers=h, files={"file": ("cv.pdf", b"%PDF-1.4 resume", "application/pdf")})
     template = await client.post("/email-template/", headers=h, json={
         "name": "Main", "subject": "{{ job_position }} at {{ company_name }}",
@@ -30,6 +29,18 @@ async def ready(client, user):
         contacts[key] = r.json()["contact_id"]
 
     return {"h": h, "template_id": template.json()["id"], "profile_id": profile.json()["id"], "contacts": contacts}
+
+
+@pytest.fixture
+async def ready(client, user):
+    """A normal user who can send."""
+    return await set_up_sender(client, user)
+
+
+@pytest.fixture
+async def admin_ready(client, admin):
+    """An admin who can send. Admins start with test mode ON."""
+    return await set_up_sender(client, admin)
 
 
 def send_body(ready, *keys, ids=None):
@@ -154,7 +165,7 @@ async def test_history_rejects_bad_filters(client, ready):
 
 
 # ---------------------------------------------------------------- admin test mode
-async def test_admin_test_mode_only_allows_test_emails(client, admin):
+async def test_test_mode_saves_emails_in_lowercase(client, admin):
     h = headers_for(admin)
     assert (await client.get("/test-mode/", headers=h)).json() == {"enabled": True, "test_emails": []}
 
@@ -164,3 +175,40 @@ async def test_admin_test_mode_only_allows_test_emails(client, admin):
 
 async def test_test_mode_is_admin_only(client, user):
     assert (await client.get("/test-mode/", headers=headers_for(user))).status_code == 403
+
+
+async def test_admin_in_test_mode_can_only_send_to_test_emails(client, admin_ready, fakes):
+    h = admin_ready["h"]
+
+    # Test mode is on from the start, with no test emails: nothing can be sent
+    r = await client.post("/email/send", headers=h, json=send_body(admin_ready, "ok1"))
+    assert r.status_code == 400
+    assert "Test mode is on" in r.json()["detail"]
+
+    # Add one test email: sending to it works
+    await client.put("/test-mode/", headers=h, json={"enabled": True, "test_emails": ["priya@zoho.com"]})
+    r = await client.post("/email/send", headers=h, json=send_body(admin_ready, "ok1"))
+    assert r.status_code == 202
+    assert r.json()["test_mode"] is True
+
+    # One contact outside the list: the whole batch is refused, nothing more is sent
+    r = await client.post("/email/send", headers=h, json=send_body(admin_ready, "ok1", "ok2"))
+    assert r.status_code == 400
+    assert "rahul@tcs.com" in r.json()["detail"]
+    assert [email["to"] for email in fakes.sent] == ["priya@zoho.com"]
+
+
+async def test_admin_with_test_mode_off_can_send_to_anyone(client, admin_ready, fakes):
+    h = admin_ready["h"]
+    await client.put("/test-mode/", headers=h, json={"enabled": False, "test_emails": []})
+
+    r = await client.post("/email/send", headers=h, json=send_body(admin_ready, "ok1", "ok2"))
+    assert r.status_code == 202
+    assert r.json()["test_mode"] is False
+    assert len(fakes.sent) == 2
+
+
+async def test_test_mode_never_limits_normal_users(client, ready, fakes):
+    r = await client.post("/email/send", headers=ready["h"], json=send_body(ready, "ok1", "ok2"))
+    assert r.status_code == 202
+    assert r.json()["test_mode"] is False
