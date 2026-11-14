@@ -26,3 +26,6 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Database backups (contain all your data)
+*.dump
