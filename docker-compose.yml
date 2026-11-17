@@ -1,0 +1,90 @@
+# =============================================================================
+# docker-compose.yml: runs the whole ColdReach app with one command
+#
+#   docker compose up --build     build the images and start everything
+#   docker compose down           stop everything (the database data is kept)
+#   docker compose logs -f api    watch the API's logs
+#
+# Three containers (Compose calls them "services"):
+#   db   -> Postgres 17, the database
+#   api  -> FastAPI (built from ./Dockerfile)
+#   web  -> Nginx serving the React site, forwarding /api/... to the api
+#
+# Only "web" is reachable from outside. "db" and "api" talk to each other on a
+# private network that Compose creates, using the service names as addresses.
+#
+# Values like ${POSTGRES_PASSWORD} are read from the .env file next to this one.
+# =============================================================================
+
+services:
+  # -------------------------------------------------------------- database
+  db:
+    image: postgres:17          # official image from Docker Hub, nothing to build
+
+    # Postgres creates this user, password and empty database on its first start
+    environment:
+      POSTGRES_USER: coldreach
+      # ":?" = stop with this message if POSTGRES_PASSWORD is missing from .env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: coldreach
+
+    # The database files live in a named volume (db_data), outside the container,
+    # so the data survives "docker compose down", restarts and rebuilds.
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+    # Docker asks Postgres every 5 s "are you ready?"; "api" waits for a yes
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coldreach"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    # Start again by itself after a crash or a server reboot
+    restart: unless-stopped
+
+  # -------------------------------------------------------------- API
+  api:
+    build: .                    # build the image from ./Dockerfile
+
+    # All secrets come from .env: JWT key, encryption key, AWS, Google, ...
+    env_file: .env
+
+    # These four win over the same names in .env, because inside Docker
+    # some values must be different from the laptop setup:
+    environment:
+      # "db" = the database service above (not localhost); "+asyncpg" = the driver
+      DATABASE_URL: postgresql+asyncpg://coldreach:${POSTGRES_PASSWORD}@db:5432/coldreach
+      # ":-" = use PUBLIC_URL from .env if it is set, otherwise http://localhost:8080
+      # (on the server, .env will have PUBLIC_URL=https://<your domain>)
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:8080}
+      GOOGLE_REDIRECT_URI: ${PUBLIC_URL:-http://localhost:8080}/api/auth/google/callback
+      # Don't print every SQL query in production logs
+      DB_ECHO: "false"
+
+    # Don't start until the database says it is ready (see healthcheck above)
+    depends_on:
+      db:
+        condition: service_healthy
+
+    restart: unless-stopped
+    # No "ports:" here on purpose: only Nginx (web) can reach the API
+
+  # -------------------------------------------------------------- website
+  web:
+    build: ./frontend           # build the image from ./frontend/Dockerfile
+
+    # "<laptop port>:<container port>". Nginx listens on 80 inside the container.
+    # Laptop: http://localhost:8080. On the server, .env can set WEB_PORT=80.
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+    depends_on:
+      - api
+
+    restart: unless-stopped
+
+# Named volumes used above. This block sits at the left edge, next to
+# "services:", not inside it.
+volumes:
+  db_data:
