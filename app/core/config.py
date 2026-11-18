@@ -73,9 +73,16 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", None)
 
-# Ensure application refuses to start if S3 credentials are missing
-if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY or not S3_BUCKET_NAME:
-    raise RuntimeError("AWS S3 credentials are not fully set. Please specify AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME in your .env file.")
+# The bucket name is always required
+if not S3_BUCKET_NAME:
+    raise RuntimeError("S3_BUCKET_NAME is not set. Please specify it in your .env file")
+
+# AWS keys are optional:
+#   - laptop: put both keys in .env
+#   - EC2 server: leave both out, boto3 then uses the server's IAM role
+# Only one of the two set is always a mistake, so stop early.
+if bool(AWS_ACCESS_KEY_ID) != bool(AWS_SECRET_ACCESS_KEY):
+    raise RuntimeError("Set both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or neither (to use the EC2 IAM role).")
 
 
 
