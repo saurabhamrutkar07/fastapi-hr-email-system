@@ -1,0 +1,21 @@
+# =============================================================================
+# docker-compose.prod.yml: extra settings used ONLY on the server.
+#
+# Compose merges this file on top of docker-compose.yml. On the server, .env has
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+# so a plain "docker compose up -d" reads both files.
+# The laptop does not set COMPOSE_FILE, so it keeps plain HTTP on :8080.
+# =============================================================================
+
+services:
+  web:
+    # Port 80 already comes from docker-compose.yml (WEB_PORT=80 on the server).
+    # Add 443 for HTTPS.
+    ports:
+      - "443:443"
+
+    volumes:
+      # Swap the HTTP-only config for the HTTPS one
+      - ./deploy/nginx-https.conf:/etc/nginx/conf.d/default.conf:ro
+      # Let's Encrypt certificates made by certbot on the server (read-only)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
