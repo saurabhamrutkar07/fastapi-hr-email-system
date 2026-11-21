@@ -1,0 +1,23 @@
+# systemd service: run the Cloudflare DNS update once on every boot.
+#
+# Install on the server:
+#   sudo cp deploy/cloudflare-ddns.service /etc/systemd/system/coldreach-ddns.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable coldreach-ddns.service
+#
+# Check the last run:  journalctl -u coldreach-ddns.service -b
+
+[Unit]
+Description=Point the domain's DNS record at this server's public IP
+# Wait until the network is really up, the script needs the internet
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# oneshot = run the script once and finish (not a long-running program)
+Type=oneshot
+ExecStart=/usr/local/bin/coldreach-ddns.sh
+
+[Install]
+# Start it during a normal boot
+WantedBy=multi-user.target
