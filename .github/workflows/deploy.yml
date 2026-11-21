@@ -1,0 +1,104 @@
+# CD: deploy to the EC2 server after CI passes on main.
+#
+# How it reaches the server without SSH or stored AWS keys:
+#   1. OIDC: Github gives this run a signed ID token; AWS swaps it for
+#      1-hour credentials of the role coldreach-github-deploy. That role
+#      trusts only this repo's main branch and can only run a command on
+#      this one server (deploy/iam-github-deploy-policy.json).
+#   2. SSM. AWS Systems Manager runs scripts/deploy.sh on the server
+#     through the SSM agent. Port 22 stays closed to Github.
+#
+# The server is often stopped. Then the job skips the deploy, and the
+# server's boot service runs the same deploy deploy when it next starts.
+
+name: Deploy
+
+on:
+  # Run when the CI workflow finishes...
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# Never run two deploys at the same time; a newer one waits for the older
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write     # needed to ask Github for the OIDC token
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  ROLE_ARN: arn:aws:iam::485356574817:role/coldreach-github-deploy
+  INSTANCE_ID: i-00cb1f1ffe7b4eeec
+  SITE: https://saurabhamrutkar.com
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    # ...and only deploy if CI passed (a merge to main that broke tests must not go live)
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+
+    steps:
+      - name: Get AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Is the server running?
+        id: server
+        run:  |
+          STATE=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+            --query "Reservations[0].Instances[0].State.Name" --output text)
+          echo "Server state: $STATE"
+          echo "state=$STATE" >> "$GITHUB_OUTPUT"
+          if [ "$STATE" != "running" ]; then
+            echo "::notice::Server is $STATE, deploy skipped. It will deploy itself on the next start."
+          fi
+
+      - name: Run the deploy script on the server (SSM)
+        if: steps.server.outputs.state == 'running'
+        run: |
+          # Pull first, so the newest deploy.sh is the one that runs
+          CMD='sudo -u ubuntu -H bash -c "cd /home/ubuntu/coldreach && git pull --ff-only && bash scripts/deploy.sh"'
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy ${GITHUB_SHA::7} from GitHub Actions" \
+            --parameters "$(jq -n --arg c "$CMD" '{commands: [$c]}')" \
+            --query "Command.CommandId" --output text)
+          echo "SSM command: $COMMAND_ID"
+
+          # Wait up to 15 minutes for the server to finish (a full rebuild takes a few)
+          for _ in $(seq 1 90); do
+            sleep 10
+            STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in
+              Pending|InProgress|Delayed) echo "...$STATUS";;
+              *) break ;;
+            esac
+          done
+
+          # Show what the server printed
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "[StandardOutputContent, StandardErrorContent]" --output text
+
+
+          echo "Final status: $STATUS"
+          [ "$STATUS" = "Success" ]
+
+      - name: Check the live site
+        if: steps.server.outputs.state == 'running'
+        run: |
+          curl -sf --retry 5 --retry-delay 5 --retry-all-errors "$SITE/api/health"
+          echo
+          echo "Live site is healthy"
+

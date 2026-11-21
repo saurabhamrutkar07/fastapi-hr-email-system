@@ -137,9 +137,13 @@ function Start-Server {
 
     Update-SshRule
 
-    # Containers start on boot (restart: unless-stopped); wait for the app
+    # The laptop may still remember the old IP for the domain
+    ipconfig /flushdns | Out-Null
+
+    # On boot the server pulls the latest code and rebuilds if needed
+    # (deploy/coldreach-deploy.service), so give it up to 5 minutes
     Write-Host "Waiting for the site..."
-    for ($i = 0; $i -lt 36; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         if ((Get-Health $server.Ip) -eq "200") {
             Write-Host "Site is up: https://$Domain"
             Show-Status
@@ -147,7 +151,7 @@ function Start-Server {
         }
         Start-Sleep -Seconds 5
     }
-    Write-Warning "Site did not answer in 3 minutes. Log in with: .\scripts\server.ps1 ssh"
+    Write-Warning "Site did not answer in 5 minutes. Log in with: .\scripts\server.ps1 ssh"
 }
 
 function Stop-Server {
