@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import FRONTEND_URL
+from app.core.config import FRONTEND_URL, APP_ENV
 from app.core.rate_limit import limiter,rate_limit_exceeded
 from app.core.monitoring import init_sentry
 from app.core.request_id import request_id_middleware
@@ -88,6 +88,9 @@ async def lifespan(app: FastAPI):
 # Before the app is created, so Sentry can hook into FastAPI
 init_sentry()
 
+# API docs (/docs, /redoc, /openapi.json) only outside production.
+# On the live server they would hand out a map of every endpoint.
+SHOW_DOCS = APP_ENV != "production"
 
 app = FastAPI(
     title="HR Contact & Cold Email System",
@@ -98,6 +101,10 @@ app = FastAPI(
     ),
     version="2.0.0",
     lifespan=lifespan,
+    # None = FastAPI does not create that route at all
+    docs_url="/docs" if SHOW_DOCS else None,
+    redoc_url="/redoc" if SHOW_DOCS else None,
+    openapi_url="/openapi.json" if SHOW_DOCS else None,
 )
 # Request id on every log line + clean 500s (app/core/request_id.py).
 # Added before CORS: the middleware added last runs first, so CORS wraps
