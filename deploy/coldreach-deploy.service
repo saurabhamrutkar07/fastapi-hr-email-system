@@ -1,0 +1,28 @@
+# systemd service: deploy the latest main once on every boot.
+#
+# The server is stopped most of the time, so a merge often happens while
+# it is off and GitHub Actions skips the deploy. This catches up on start.
+#
+# Install on the server:
+#   sudo cp deploy/coldreach-deploy.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable coldreach-deploy.service
+#
+# Check the last run:  journalctl -u coldreach-deploy.service -b
+
+[Unit]
+Description=Deploy the latest main branch of ColdReach
+# Needs the internet (git pull) and Docker
+Wants=network-online.target
+After=network-online.target docker.service coldreach-ddns.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/bin/bash /home/ubuntu/coldreach/scripts/deploy.sh
+# A full image rebuild can take a few minutes
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target
