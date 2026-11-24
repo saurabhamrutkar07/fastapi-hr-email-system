@@ -8,7 +8,7 @@ from their own Gmail account.
 
 - **Backend:** FastAPI (async), PostgreSQL, SQLAlchemy 2, Alembic
 - **Frontend:** React 19, Vite, Tailwind CSS v4
-- **Infra:** Docker Compose, Nginx, AWS EC2 + S3, Cloudflare DNS, Let's Encrypt, GitHub Actions CI
+- **Infra:** Docker Compose, Nginx, AWS EC2 + S3 + SSM + EventBridge Scheduler, Cloudflare DNS, Let's Encrypt, GitHub Actions CI/CD, Sentry
 
 ---
 
@@ -125,9 +125,13 @@ IP changes on every start.
 | AWS access | EC2 IAM role for S3, no access keys on the server |
 | Backups | [scripts/backup.sh](scripts/backup.sh): `pg_dump` to S3 every 3 hours (cron) and before every stop; S3 deletes backups after 30 days |
 | Start / stop | [scripts/server.ps1](scripts/server.ps1) from the laptop: `start`, `stop` (backup first), `status`, `ssh`. Uses an IAM user that can only start/stop this one server ([deploy/iam-laptop-policy.json](deploy/iam-laptop-policy.json)) |
+| Nightly stop | EventBridge Scheduler stops the server every night at 9 PM IST, in case it was left on |
+| Deploy (CD) | [.github/workflows/deploy.yml](.github/workflows/deploy.yml): after CI passes on `main`, GitHub Actions gets short-lived AWS credentials through OIDC (no stored keys) and runs [scripts/deploy.sh](scripts/deploy.sh) on the server through AWS SSM (no SSH). Role permissions: [deploy/iam-github-deploy-policy.json](deploy/iam-github-deploy-policy.json) |
+| Boot deploy | If the server was off during a merge, [deploy/coldreach-deploy.service](deploy/coldreach-deploy.service) runs the same deploy script on the next boot |
+| Monitoring | Sentry error reporting (only when `SENTRY_DSN` is set) |
 
-Deploying a change: merge the pull request, then on the server
-`git pull && docker compose up -d --build`.
+Deploying a change: merge the pull request into `main`. CI runs, and if it
+passes the Deploy workflow updates the live site and checks `/api/health`.
 
 ---
 
@@ -170,8 +174,8 @@ app/
 migrations/         Alembic migrations
 tests/              pytest suite
 frontend/           React app (pages, components, api clients) + Nginx config
-deploy/             Production Nginx config, Cloudflare DNS update, IAM policy
-scripts/            backup.sh (server), server.ps1 (laptop start/stop)
+deploy/             Production Nginx config, Cloudflare DNS update, systemd services, IAM policies
+scripts/            backup.sh + deploy.sh (server), server.ps1 (laptop start/stop)
 Dockerfile, docker-compose.yml, docker-compose.prod.yml
 ```
 
@@ -179,8 +183,7 @@ Dockerfile, docker-compose.yml, docker-compose.prod.yml
 
 ## Roadmap
 
-- Continuous deployment from GitHub Actions
-- Monitoring and uptime alerts
+- Uptime alerts
 - Scheduled sending (pick a date and time)
 - Reply tracking over IMAP and follow-up reminders
 
