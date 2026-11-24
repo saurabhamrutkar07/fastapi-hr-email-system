@@ -1,5 +1,8 @@
 # ColdReach: HR Contacts & Cold Email Platform
 
+[![CI](https://github.com/saurabhamrutkar07/fastapi-hr-email-system/actions/workflows/ci.yml/badge.svg)](https://github.com/saurabhamrutkar07/fastapi-hr-email-system/actions/workflows/ci.yml)
+[![Deploy](https://github.com/saurabhamrutkar07/fastapi-hr-email-system/actions/workflows/deploy.yml/badge.svg)](https://github.com/saurabhamrutkar07/fastapi-hr-email-system/actions/workflows/deploy.yml)
+
 A full-stack web app for job seekers to keep a shared list of HR / recruiter
 contacts and send them personalised cold emails, with their resume attached,
 from their own Gmail account.
