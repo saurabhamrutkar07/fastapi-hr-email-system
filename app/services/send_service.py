@@ -35,7 +35,6 @@ from app.services.cold_email_service import(
     get_user_smtp_config,
     render_cold_email,
 )
-from app.services.email_logger import log_email
 from common.Logger import Logger 
 
 logger = Logger.get_logger()
@@ -258,13 +257,12 @@ async def send_jobs(
                 email_password=email_password,
                 message_id=job["message_id"]      
             )
-            log_email(to_email,"SUCCESS")
+            logger.info(f"Email sent to {to_email}")
             await record_outcome(user_id, job, "SUCCESS", None, "Email sent successfully via SMTP")
         except Exception as exc:
             error_code, error_details = classify_email_exception(exc)
             # The raw error goes to the logs; the user sees the clear message
             logger.warning(f"Email to {to_email} failed: {error_code}: {exc!r}")
-            log_email(to_email,"FAILED", f"{error_code}: {exc!r}")
             await record_outcome(user_id, job, "FAILED", error_code, error_details)
             if error_code in ACCOUNT_WIDE_ERRORS:
                 stop_reason = (error_code,error_details)
