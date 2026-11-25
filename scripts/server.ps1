@@ -12,6 +12,9 @@ What it needs:
       That IAM user (coldreach-laptop) can only start/stop this one server
       and change the SSH rule on its firewall: deploy/iam-laptop-policy.json
     - The SSH key file at $KeyPath below
+    - Optional: UPTIMEROBOT_API_KEY as a Windows user environment variable. 
+      start resumes the uptime monitor, stop pauses it, so a planned stop 
+      does not send "site down" emails.
 
 The domain's DNS is not changed from here: the server updates Cloudflare
 itself on every boot (deploy/cloudflare-ddns.sh).
@@ -39,6 +42,7 @@ $SgId       = "sg-0b992f200d483e102"     # coldreach-sg
 $Domain     = "saurabhamrutkar.com"
 $KeyPath    = "$HOME\Documents\sshkey\coldreach-key.pem"
 $BackupCmd  = "/home/ubuntu/coldreach-backup.sh"
+$UptimeMonitorId = "804808359"
 
 # A new terminal finds "aws" on PATH; an old one may not, so fall back
 $Aws = (Get-Command aws -ErrorAction SilentlyContinue).Source
@@ -105,6 +109,27 @@ function Get-Health([string]$Ip) {
         --resolve "${Domain}:443:$Ip" "https://$Domain/api/health")
 }
 
+# Pause (0) or resume (1) the UptimeRobot monitor, so a planned stop 
+# does not send "site down" emails. The API key is a Windows user
+# environment variable, never in a repo. 
+# If this fails, only warn: starting/stopping the server matters more.
+function Set-UptimeMonitor([int]$Status) {
+    $key = [Environment]::GetEnvironmentVariable("UPTIMEROBOT_API_KEY","User")
+    if (-not $key) {
+        Write-Warning "UPTIMEROBOT_API_KEY is not set, uptime monitor not chenged"
+        return
+    }
+    try { 
+        $r = Invoke-RestMethod -Method Post -Uri "https://api.uptimerobot.com/v2/editMonitor" `
+        -Body @{ api_key = $key; id = $UptimeMonitorId; status = $Status; format = "json" }
+        if ($r.stat -ne "ok") { throw ($r.error | ConvertTo-Json -Compress) }
+        $word = if ($Status -eq 1 ) { "resumed" } else { "paused" } 
+        Write-Host "Uptime monitor $word" 
+    } catch {
+        Write-Warning "Could not change the uptime monitor: $_"
+    }
+}
+
 
 # ------------------------------------------------------------
 # Actions
@@ -146,11 +171,14 @@ function Start-Server {
     for ($i = 0; $i -lt 60; $i++) {
         if ((Get-Health $server.Ip) -eq "200") {
             Write-Host "Site is up: https://$Domain"
+            Set-UptimeMonitor 1
             Show-Status
             return
         }
         Start-Sleep -Seconds 5
     }
+    # Resume anyway: if the site stays down, the monitor should alert 
+    Set-UptimeMonitor 1 
     Write-Warning "Site did not answer in 5 minutes. Log in with: .\scripts\server.ps1 ssh"
 }
 
@@ -169,6 +197,9 @@ function Stop-Server {
             throw "Backup failed, so the server was NOT stopped. Check it, or use -SkipBackup."
         }
     }
+
+    # Planned stop: pause the monitor first, so it does not email "site down"
+    Set-UptimeMonitor 0
 
     Write-Host "Stopping server..."
     Invoke-Aws ec2 stop-instances --instance-ids $InstanceId | Out-Null
